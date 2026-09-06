@@ -86,6 +86,9 @@ class GestureRecognizer(
     private var deadlineMs: Long? = null
     private var lastTap: Tap? = null
 
+    /** True once the finger has travelled far enough that this touch belongs to a gesture. */
+    val isDragging: Boolean get() = state == State.DRAGGING
+
     fun onTouch(sample: TouchSample): List<GestureEvent> =
         when (sample.action) {
             TouchAction.DOWN -> {

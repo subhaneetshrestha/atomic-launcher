@@ -10,7 +10,10 @@ import android.widget.LinearLayout
 import android.widget.TextClock
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import io.github.subhaneetshrestha.atomic.core.theme.Action
+import io.github.subhaneetshrestha.atomic.core.theme.BindingSurface
 import io.github.subhaneetshrestha.atomic.core.theme.HomeInfoConfig
+import io.github.subhaneetshrestha.atomic.core.theme.InfoLineId
 import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.core.theme.Theme
 import io.github.subhaneetshrestha.atomic.home.ThemeApplier
@@ -29,6 +32,8 @@ class InfoLinesView(
     context: Context,
     private val applier: ThemeApplier,
 ) : LinearLayout(context) {
+    /** A line was tapped or held; what that does is the dispatcher's decision, not this view's. */
+    var onSurface: ((BindingSurface) -> Unit)? = null
     private val clock = TextClock(context)
     private val date = TextView(context)
     private val battery = TextView(context)
@@ -79,9 +84,40 @@ class InfoLinesView(
         clock.visibility = if (config.clock.enabled) VISIBLE else GONE
         date.visibility = if (config.date.enabled) VISIBLE else GONE
         battery.visibility = if (config.battery.enabled) VISIBLE else GONE
+        wire(clock, InfoLineId.CLOCK, config)
+        wire(date, InfoLineId.DATE, config)
+        wire(battery, InfoLineId.BATTERY, config)
         visibility = if (config.clock.enabled || config.date.enabled || config.battery.enabled) VISIBLE else GONE
         refreshDate()
         refreshBattery()
+    }
+
+    /**
+     * A line answers touches only when something is bound to it, so a double tap over an idle
+     * clock still reaches the home screen behind it.
+     */
+    private fun wire(
+        view: TextView,
+        id: InfoLineId,
+        config: HomeInfoConfig,
+    ) {
+        val tappable = config.tap(id) != Action.None
+        val holdable = config.longPress(id) != Action.None
+        view.setOnClickListener(
+            if (tappable) OnClickListener { onSurface?.invoke(BindingSurface.InfoTap(id)) } else null,
+        )
+        view.setOnLongClickListener(
+            if (holdable) {
+                OnLongClickListener {
+                    onSurface?.invoke(BindingSurface.InfoLongPress(id))
+                    true
+                }
+            } else {
+                null
+            },
+        )
+        view.isClickable = tappable
+        view.isLongClickable = holdable
     }
 
     fun onStart() {

@@ -8,28 +8,47 @@ import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import io.github.subhaneetshrestha.atomic.R
 import io.github.subhaneetshrestha.atomic.ThemedActivity
+import io.github.subhaneetshrestha.atomic.actions.ActionAvailability
+import io.github.subhaneetshrestha.atomic.actions.ActionGrant
+import io.github.subhaneetshrestha.atomic.actions.ActionRunner
+import io.github.subhaneetshrestha.atomic.actions.AndroidActionEnvironment
+import io.github.subhaneetshrestha.atomic.actions.Availability
+import io.github.subhaneetshrestha.atomic.actions.LauncherSurfaces
+import io.github.subhaneetshrestha.atomic.actions.UnsupportedReason
 import io.github.subhaneetshrestha.atomic.apps.AppActions
 import io.github.subhaneetshrestha.atomic.apps.AppKey
 import io.github.subhaneetshrestha.atomic.apps.AppLauncher
 import io.github.subhaneetshrestha.atomic.apps.AppRepository
+import io.github.subhaneetshrestha.atomic.core.theme.BindingSurface
+import io.github.subhaneetshrestha.atomic.core.theme.BuiltinId
+import io.github.subhaneetshrestha.atomic.core.theme.EdgeExclusion
 import io.github.subhaneetshrestha.atomic.core.theme.InfoPosition
 import io.github.subhaneetshrestha.atomic.core.theme.Settings
+import io.github.subhaneetshrestha.atomic.gestures.Dispatch
+import io.github.subhaneetshrestha.atomic.gestures.GestureDispatcher
+import io.github.subhaneetshrestha.atomic.gestures.GestureEvent
+import io.github.subhaneetshrestha.atomic.gestures.Haptics
 import io.github.subhaneetshrestha.atomic.home.info.InfoLinesView
 import io.github.subhaneetshrestha.atomic.settings.SettingsActivity
 import io.github.subhaneetshrestha.atomic.settings.SettingsRepository
 import io.github.subhaneetshrestha.atomic.setup.SetupActivity
+import io.github.subhaneetshrestha.atomic.system.NoSystemActions
 import io.github.subhaneetshrestha.atomic.util.Logs
 
 /**
  * The single home activity. It must never finish on Back, must survive being recreated with no
  * saved state (stateNotNeeded), and receives the Home key through onNewIntent while it exists.
  */
-class HomeActivity : ThemedActivity() {
+class HomeActivity :
+    ThemedActivity(),
+    LauncherSurfaces {
     private val repository: AppRepository get() = atomicApp.appRepository
     private val settings: SettingsRepository get() = atomicApp.settingsRepository
 
@@ -42,6 +61,10 @@ class HomeActivity : ThemedActivity() {
     private lateinit var launcher: AppLauncher
     private lateinit var defaultHome: DefaultHomePrompt
     private lateinit var appMenu: AppMenu
+    private lateinit var environment: AndroidActionEnvironment
+    private lateinit var runner: ActionRunner
+    private lateinit var dispatcher: GestureDispatcher
+    private lateinit var haptics: Haptics
     private var infoPosition: InfoPosition? = null
     private var visibleRows: List<AppKey> = emptyList()
 
@@ -75,7 +98,12 @@ class HomeActivity : ThemedActivity() {
         launcher = AppLauncher(this, repository)
         defaultHome = DefaultHomePrompt(this)
 
-        appMenu = AppMenu(this, settings, AppActions(this, repository))
+        val appActions = AppActions(this, repository)
+        appMenu = AppMenu(this, settings, appActions)
+        environment =
+            AndroidActionEnvironment(this, repository, NoSystemActions, BUILT_SURFACES) { defaultHome.isDefaultHome() }
+        runner = ActionRunner(this, environment, this, repository, launcher, appActions, NoSystemActions)
+        dispatcher = GestureDispatcher(ActionAvailability(environment))
         list =
             HomeListView(this, applier).apply {
                 onRowClick = { entry, view -> launcher.launch(entry, view) }
@@ -84,19 +112,16 @@ class HomeActivity : ThemedActivity() {
                     true
                 }
             }
-        infoLines = InfoLinesView(this, applier)
+        infoLines = InfoLinesView(this, applier).apply { onSurface = ::onSurfaceTouched }
         block = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         banner = DefaultHomeBanner(this, applier).apply { setOnClickListener { defaultHome.request(roleRequest) } }
         root =
             HomeRootView(this).apply {
                 setBlock(block, applier.verticalGravity(settings.current.verticalPosition))
                 addFooter(banner)
-                // Phase 2 entry point to settings; the gesture engine takes over in Phase 3.
-                setOnLongClickListener {
-                    openSettings()
-                    true
-                }
+                onGesture = ::onGesture
             }
+        haptics = Haptics(root)
         setContentView(root)
 
         // Always enabled: Back dismisses overlays (none yet) and otherwise does nothing. This keeps
@@ -166,6 +191,8 @@ class HomeActivity : ThemedActivity() {
         list.render(rows, view, colors)
         infoLines.bind(document.homeInfo, document.theme, view, colors)
         banner.applyColors(colors)
+        haptics.enabled = document.gestures.haptics
+        root.takeOverSideEdges = document.gestures.edgeExclusion == EdgeExclusion.BOTH
         root.positionBlock(applier.verticalGravity(view.verticalPosition))
     }
 
@@ -182,9 +209,90 @@ class HomeActivity : ThemedActivity() {
         for (child in ordered) block.addView(child, LinearLayout.LayoutParams(params))
     }
 
-    private fun openSettings() {
+    override fun openLauncherSettings() {
         startActivity(Intent(this, SettingsActivity::class.java))
     }
+
+    override fun chooseDefaultLauncher() {
+        defaultHome.request(roleRequest)
+    }
+
+    private fun onGesture(event: GestureEvent) {
+        haptics.onGesture(event)
+        carryOut(dispatcher.dispatch(event, settings.settings))
+    }
+
+    private fun onSurfaceTouched(surface: BindingSurface) {
+        carryOut(dispatcher.dispatch(surface, settings.settings))
+    }
+
+    private fun carryOut(outcome: Dispatch) {
+        when (outcome) {
+            Dispatch.Ignore -> {
+                Unit
+            }
+
+            is Dispatch.Run -> {
+                if (!runner.run(outcome.action)) {
+                    haptics.rejected()
+                    toast(R.string.action_failed)
+                }
+            }
+
+            // Nothing is enabled behind the user's back: say what it would take.
+            is Dispatch.OfferGrant -> {
+                haptics.rejected()
+                toast(
+                    when (outcome.grant) {
+                        ActionGrant.ACCESSIBILITY -> R.string.action_needs_accessibility
+                        ActionGrant.DEVICE_ADMIN -> R.string.action_needs_device_admin
+                    },
+                )
+            }
+
+            is Dispatch.Explain -> {
+                haptics.rejected()
+                toast(reason(outcome.availability))
+            }
+        }
+    }
+
+    private fun reason(availability: Availability): Int =
+        when (availability) {
+            is Availability.Unsupported -> {
+                when (availability.reason) {
+                    UnsupportedReason.NEEDS_NEWER_ANDROID -> {
+                        R.string.action_needs_newer_android
+                    }
+
+                    UnsupportedReason.NO_HARDWARE -> {
+                        R.string.action_no_hardware
+                    }
+
+                    UnsupportedReason.NOT_IN_THIS_VERSION, UnsupportedReason.UNKNOWN_ACTION -> {
+                        R.string.action_not_yet_built
+                    }
+                }
+            }
+
+            Availability.NoHandler -> {
+                R.string.action_no_app
+            }
+
+            Availability.Missing -> {
+                R.string.action_app_gone
+            }
+
+            Availability.NotDefaultLauncher -> {
+                R.string.action_needs_home_role
+            }
+
+            else -> {
+                R.string.action_failed
+            }
+        }
+
+    private fun toast(message: Int) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
     private fun refreshBanner() {
         banner.visibility = if (defaultHome.isDefaultHome()) View.GONE else View.VISIBLE
@@ -192,5 +300,8 @@ class HomeActivity : ThemedActivity() {
 
     private companion object {
         const val TAG = "HomeActivity"
+
+        /** The launcher's own surfaces this version has built; the rest are honestly unavailable. */
+        val BUILT_SURFACES = setOf(BuiltinId.LAUNCHER_SETTINGS, BuiltinId.DEFAULT_LAUNCHER_CHOOSER)
     }
 }

@@ -39,6 +39,15 @@ class ActionAvailabilityTest {
 
         assertEquals(Availability.Unsupported(UnsupportedReason.NOT_IN_THIS_VERSION), of(BuiltinId.OPEN_SEARCH))
         assertEquals(Availability.Available, of(BuiltinId.LAUNCHER_SETTINGS), "the ones it has built are fine")
+
+        env.unbuilt += BuiltinId.RECENTS
+        env.accessibilityEnabled = true
+
+        assertEquals(
+            Availability.Unsupported(UnsupportedReason.NOT_IN_THIS_VERSION),
+            of(BuiltinId.RECENTS),
+            "a build without the service cannot ask the user to allow it",
+        )
     }
 
     @Test

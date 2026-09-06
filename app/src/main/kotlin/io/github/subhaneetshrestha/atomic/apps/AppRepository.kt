@@ -83,6 +83,25 @@ class AppRepository(
         if (locales.toLanguageTags() != lastLocales) refresh()
     }
 
+    /** The entry for a stored component reference, or null when that app is not installed here. */
+    fun entryFor(
+        component: String,
+        user: Long,
+    ): AppEntry? {
+        val key = AppKey.fromComponent(component, user) ?: return null
+        return current.entries.firstOrNull { it.key == key }
+    }
+
+    fun contains(
+        component: String,
+        user: Long,
+    ): Boolean = entryFor(component, user) != null
+
+    fun containsPackage(
+        pkg: String,
+        user: Long,
+    ): Boolean = current.entries.any { it.key.packageName == pkg && it.key.userSerial == user }
+
     /** The UserHandle behind a serial seen in the current snapshot, or null if that profile is gone. */
     fun userFor(serial: Long): UserHandle? = users[serial]
 

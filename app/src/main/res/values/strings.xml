@@ -60,4 +60,15 @@
     <string name="setup_skip">Skip</string>
     <string name="setup_next">Next</string>
     <string name="setup_done">Done</string>
+
+    <!-- Why a gesture did nothing -->
+    <string name="action_needs_newer_android">That needs a newer version of Android</string>
+    <string name="action_not_yet_built">That arrives in a later version of atomic</string>
+    <string name="action_no_hardware">This device does not have that</string>
+    <string name="action_no_app">No app on this device can do that</string>
+    <string name="action_app_gone">That app is not installed any more</string>
+    <string name="action_needs_home_role">Set atomic as your home app first</string>
+    <string name="action_needs_accessibility">That needs the accessibility service</string>
+    <string name="action_needs_device_admin">That needs device admin</string>
+    <string name="action_failed">That did not work</string>
 </resources>

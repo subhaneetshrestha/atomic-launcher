@@ -58,8 +58,10 @@ class ActionAvailability(
 
     private fun ofBuiltin(id: BuiltinId): Availability =
         when {
-            id == BuiltinId.LOCK_SCREEN -> {
-                lockScreen()
+            // A surface this build does not have cannot be offered, nor can the user be asked to
+            // allow something that is not there to allow.
+            !env.isBuilt(id) -> {
+                Availability.Unsupported(UnsupportedReason.NOT_IN_THIS_VERSION)
             }
 
             env.sdkInt < BuiltinActions.minSdk(id) -> {
@@ -70,8 +72,8 @@ class ActionAvailability(
                 Availability.Unsupported(UnsupportedReason.NO_HARDWARE)
             }
 
-            id.group == ActionGroup.LAUNCHER && !env.isBuilt(id) -> {
-                Availability.Unsupported(UnsupportedReason.NOT_IN_THIS_VERSION)
+            id == BuiltinId.LOCK_SCREEN -> {
+                lockScreen()
             }
 
             id.group == ActionGroup.SYSTEM && !env.accessibilityEnabled -> {

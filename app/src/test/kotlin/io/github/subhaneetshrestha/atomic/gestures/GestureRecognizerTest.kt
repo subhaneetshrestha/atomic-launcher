@@ -125,6 +125,18 @@ class GestureRecognizerTest {
     }
 
     @Test
+    fun `the touch becomes a drag once it passes the slop, and is free again when it ends`() {
+        recognizer.onTouch(down(500f, 1000f, 0))
+        assertEquals(false, recognizer.isDragging, "a press alone still belongs to whatever is under it")
+
+        recognizer.onTouch(move(500f, 900f, 40))
+        assertEquals(true, recognizer.isDragging, "from here the gesture owns the touch")
+
+        recognizer.onTouch(up(500f, 850f, 80))
+        assertEquals(false, recognizer.isDragging)
+    }
+
+    @Test
     fun `crossing the long distance arms the swipe once and the release is a long one`() {
         val events =
             feed(
