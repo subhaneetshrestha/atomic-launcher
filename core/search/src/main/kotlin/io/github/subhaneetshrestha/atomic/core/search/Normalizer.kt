@@ -3,8 +3,8 @@ package io.github.subhaneetshrestha.atomic.core.search
 import java.text.Normalizer as Unicode
 
 /**
- * A label reduced to what matching cares about: Latin accents off, one case, punctuation turned
- * into single spaces, and a note of where each character came from so a match can be shown in the
+ * A label reduced to what matching cares about: accents off however they were typed, one case,
+ * punctuation turned into single spaces, and a note of where each character came from so a match can be shown in the
  * original text. Marks that are letters in their own right, such as the vowel signs of Devanagari,
  * are kept.
  */
@@ -40,10 +40,12 @@ object Normalizer {
             val codePoint = text.codePointAt(index)
             val width = Character.charCount(codePoint)
             when {
-                // A mark written as its own character is part of the word: the vowel signs of
-                // Devanagari and its neighbours are letters, not decoration. Only the marks that
-                // fall out of pulling a precomposed letter apart are dropped, which is what turns
-                // an accented Latin letter into a plain one.
+                isDecoration(codePoint) -> {
+                    Unit
+                }
+
+                // A mark that belongs to a script of its own is part of the word: the vowel signs
+                // of Devanagari and its neighbours are letters, not decoration.
                 isMark(codePoint) -> {
                     points += Character.toLowerCase(codePoint)
                     starts += false
@@ -98,6 +100,18 @@ object Normalizer {
         return NormalizedText(points.toIntArray(), starts.toBooleanArray(), sources.toIntArray())
     }
 
+    /**
+     * A mark that only modifies whatever letter it follows, such as a Latin accent, whichever way
+     * it was typed. Its script is Inherited or Common, unlike a Devanagari vowel sign, which
+     * belongs to Devanagari and is a letter in its own right.
+     */
+    private fun isDecoration(codePoint: Int): Boolean =
+        isMark(codePoint) &&
+            when (Character.UnicodeScript.of(codePoint)) {
+                Character.UnicodeScript.INHERITED, Character.UnicodeScript.COMMON -> true
+                else -> false
+            }
+
     private fun isMark(codePoint: Int): Boolean =
         when (Character.getType(codePoint).toByte()) {
             Character.NON_SPACING_MARK, Character.COMBINING_SPACING_MARK, Character.ENCLOSING_MARK -> true
@@ -123,7 +137,7 @@ object Normalizer {
         val decomposed = Unicode.normalize(one, Unicode.Form.NFD)
         while (index < decomposed.length) {
             val point = decomposed.codePointAt(index)
-            if (!isMark(point)) bases += point
+            if (!isDecoration(point)) bases += point
             index += Character.charCount(point)
         }
         return if (bases.isEmpty()) intArrayOf(codePoint) else bases.toIntArray()

@@ -24,8 +24,12 @@ object Scorer {
     /** The very first letter typed counts double when it opens a word. */
     private const val FIRST_LETTER_WEIGHT = 2
 
-    /** Straight after the previous letter: the sign the user is typing the name itself. */
-    private const val CONSECUTIVE = 12
+    /**
+     * Straight after the previous letter: the sign the user is typing the name itself. Worth more
+     * than a word initial reached across a gap (16 - 3), so a run of letters always beats
+     * scattered initials, even where the first word is a single letter as in "T-Mobile".
+     */
+    private const val CONSECUTIVE = 14
 
     /** The label begins with what was typed. */
     private const val PREFIX = 6

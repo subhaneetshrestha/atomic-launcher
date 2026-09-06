@@ -94,4 +94,13 @@ class SearchIndexTest {
         assertTrue(perPass < 250, "ten queries over a thousand apps took $perPass ms")
         println("search: ten queries over a thousand apps in $perPass ms")
     }
+
+    @Test
+    fun `the list of every app is as long as it needs to be`() {
+        val many = SearchIndex((1..45).map { SearchEntry("k$it", "App $it") })
+
+        assertEquals(45, many.query("", limit = Int.MAX_VALUE).size, "a phone with 45 apps shows 45")
+        assertEquals(30, many.query("").size, "the default cap is still there for whoever wants it")
+        assertEquals(45, many.query("app", limit = Int.MAX_VALUE).size)
+    }
 }

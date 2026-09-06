@@ -79,4 +79,18 @@ class ScorerTest {
         assertTrue(score("Café Wi-Fi", "CAFEWIFI") != Scorer.NO_MATCH)
         assertEquals(score("Café", "cafe"), score("cafe", "café"), "both sides are reduced the same way")
     }
+
+    @Test
+    fun `a run of letters beats scattered initials even when the first word is one letter long`() {
+        assertEquals(
+            listOf("Tmall", "T-Mobile"),
+            matches("tm", "T-Mobile", "Tmall"),
+            "typing tm means the app called Tmall, not the initials of a two-word name",
+        )
+        assertEquals(listOf("Shazam", "S Health"), matches("sh", "S Health", "Shazam"))
+        assertTrue(
+            score("X-plore", "xp") < score("Xperia Lounge", "xp"),
+            "one letter, a separator and another letter must not outrank the name the query begins",
+        )
+    }
 }

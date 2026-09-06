@@ -78,4 +78,17 @@ class NormalizerTest {
             "and they never point backwards",
         )
     }
+
+    @Test
+    fun `an accent written as its own character folds the same as a precomposed one`() {
+        assertEquals(text("Caf\u00e9"), text("Cafe\u0301"), "however the label was typed, it reduces the same way")
+        assertEquals("cafe", text("Cafe\u0301"))
+        assertEquals("nepal", text("Ne\u0301pal"))
+    }
+
+    @Test
+    fun `vowel signs that belong to a script of their own are still kept`() {
+        assertEquals("नेपाल", text("नेपाल"), "these are letters, not decoration")
+        assertEquals("मेरो", text("मेरो"))
+    }
 }

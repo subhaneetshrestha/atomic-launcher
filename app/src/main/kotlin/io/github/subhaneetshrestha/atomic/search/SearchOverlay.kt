@@ -50,6 +50,7 @@ class SearchOverlay(
     private var settings = HomeSettings()
     private var colors: ResolvedColors? = null
     private var showWebSearch = false
+    private var keyboardWanted = false
     private var rows: List<Row> = emptyList()
 
     val isOpen: Boolean get() = visibility == VISIBLE
@@ -78,7 +79,7 @@ class SearchOverlay(
         // The list grows upwards from the field, so the best match is closest to it.
         list.isStackFromBottom = true
         list.isVerticalScrollBarEnabled = false
-        list.setOnItemClickListener { _, _, position, _ -> choose(rows[position]) }
+        list.setOnItemClickListener { _, _, position, _ -> choose(rowAt(position)) }
 
         field.setHint(R.string.search_hint)
         field.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
@@ -133,6 +134,7 @@ class SearchOverlay(
         this.settings = settings
         this.colors = colors
         showWebSearch = settings.webSearchFallback
+        keyboardWanted = withKeyboard
         setBackgroundColor(colors.background)
         applier.applyText(field, settings.font, settings.drawerTextSizeSp, colors.text, Gravity.START)
         field.setHintTextColor(colors.textSecondary)
@@ -150,9 +152,12 @@ class SearchOverlay(
         onClose?.invoke()
     }
 
-    /** After a rotation the keyboard has to be asked for again. */
+    /**
+     * After a rotation the keyboard has to be asked for again, but only if this opening wanted it:
+     * the drawer is deliberately opened without one.
+     */
     fun refreshKeyboard() {
-        if (isOpen && settings.autoShowKeyboard) showKeyboard()
+        if (isOpen && keyboardWanted && settings.autoShowKeyboard) showKeyboard()
     }
 
     private fun showKeyboard() {
@@ -168,7 +173,9 @@ class SearchOverlay(
     private fun search() {
         val index = index ?: return
         val query = field.text.toString()
-        val found = index.query(query)
+        // No cap: with nothing typed this is the list of every app, and a capped match list would
+        // hide a match the user can see no reason for.
+        val found = index.query(query, limit = Int.MAX_VALUE)
         rows =
             when {
                 found.isNotEmpty() -> found.map(Row::App)
@@ -181,6 +188,12 @@ class SearchOverlay(
             choose(rows.first())
         }
     }
+
+    /**
+     * The row at a place in the list. The list is laid out from the bottom, so the best match is
+     * the last of them: that puts it against the field and leaves the scroll resting on it.
+     */
+    private fun rowAt(position: Int): Row = rows[rows.lastIndex - position]
 
     private fun isComposing(): Boolean = BaseInputConnection.getComposingSpanStart(field.editableText) != -1
 
@@ -204,15 +217,15 @@ class SearchOverlay(
         }
     }
 
-    /** The rows, nearest the field first, which is how the list is stacked. */
+    /** The rows, best match last, because the list is stacked from the bottom. */
     private inner class Results : BaseAdapter() {
         override fun getCount(): Int = rows.size
 
-        override fun getItem(position: Int): Row = rows[position]
+        override fun getItem(position: Int): Row = rowAt(position)
 
         override fun getItemId(position: Int): Long = position.toLong()
 
-        override fun isEnabled(position: Int): Boolean = rows[position] !is Row.Empty
+        override fun isEnabled(position: Int): Boolean = rowAt(position) !is Row.Empty
 
         override fun getView(
             position: Int,
@@ -221,7 +234,7 @@ class SearchOverlay(
         ): View {
             val view = convertView as? TextView ?: newRow()
             val shade = colors ?: return view
-            when (val row = rows[position]) {
+            when (val row = rowAt(position)) {
                 is Row.App -> {
                     applier.applyText(view, settings.font, settings.drawerTextSizeSp, shade.text, Gravity.START)
                     view.text = row.result.label

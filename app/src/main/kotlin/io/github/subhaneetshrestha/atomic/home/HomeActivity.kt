@@ -125,7 +125,7 @@ class HomeActivity :
             SearchOverlay(this, applier).apply {
                 onLaunch = ::launchByKey
                 onWebSearch = { query -> if (!runner.searchWeb(query)) toast(R.string.action_no_app) }
-                onClose = { root.gesturesEnabled = true }
+                onClose = { root.searchOpen = false }
             }
         root =
             HomeRootView(this).apply {
@@ -202,7 +202,7 @@ class HomeActivity :
     private fun showSearch(withKeyboard: Boolean) {
         // Built on the way in: the list is small, so a rename or a new app is never stale.
         val index = AppSearchIndex.build(repository.current.entries, settings.current)
-        root.gesturesEnabled = false
+        root.searchOpen = true
         searchOverlay.open(index, settings.current, atomicApp.resolvedColors(this), withKeyboard)
     }
 

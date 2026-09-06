@@ -35,11 +35,16 @@ class HomeRootView(
 ) : FrameLayout(context) {
     var onGesture: ((GestureEvent) -> Unit)? = null
 
-    /** While the search is up it owns the screen, so the home gestures stand down. */
-    var gesturesEnabled: Boolean = true
+    /**
+     * While the search is up it owns the screen: the home gestures stand down, and the list and
+     * info lines behind it are neither drawn nor reachable by a screen reader.
+     */
+    var searchOpen: Boolean = false
         set(value) {
+            if (field == value) return
             field = value
-            if (!value) recognizer.reset()
+            if (value) recognizer.reset()
+            content.visibility = if (value) INVISIBLE else VISIBLE
         }
 
     /** Take the left and right edges from the system back gesture. The home app may; others may not. */
@@ -117,14 +122,14 @@ class HomeRootView(
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (gesturesEnabled) watch(ev)
+        if (!searchOpen) watch(ev)
         return super.dispatchTouchEvent(ev)
     }
 
     /** Once the touch is a drag it belongs to the gesture, so the row under the finger is cancelled. */
-    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = gesturesEnabled && recognizer.isDragging
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = !searchOpen && recognizer.isDragging
 
-    override fun onTouchEvent(ev: MotionEvent): Boolean = gesturesEnabled
+    override fun onTouchEvent(ev: MotionEvent): Boolean = !searchOpen
 
     private fun watch(ev: MotionEvent) {
         val action =
