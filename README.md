@@ -21,6 +21,7 @@ git config core.hooksPath .githooks   # once per clone: ktlint formats staged Ko
 ./gradlew assembleRelease checkReleaseApkSize gmsGuard
 ./gradlew installDebug                 # on a connected device or emulator
 ./gradlew ktlintFormat                 # format everything
+scripts/verify-home.sh emulator-5554 --locale   # Phase 1 acceptance on a booted emulator
 ```
 
 Modules: `:app` (Android), `:core:theme` (settings/theme schema, pure Kotlin), `:core:search` (fuzzy matching, pure Kotlin). Application id: `io.github.subhaneetshrestha.atomic`.
@@ -30,6 +31,7 @@ Modules: `:app` (Android), `:core:theme` (settings/theme schema, pure Kotlin), `
 - [`docs/design/`](docs/design/README.md) — the v1 build plan and subsystem designs.
 - [`docs/research/`](docs/research/2026-09-05-android-launcher-capabilities.md) — what Android lets a launcher do, from primary sources.
 - [`docs/decisions/`](docs/decisions/) — architecture decision records.
+- [`docs/verification/`](docs/verification/) — acceptance runs per phase.
 
 ## Support
 
