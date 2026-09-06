@@ -129,28 +129,16 @@ internal class Sanitizer {
         return cleaned
     }
 
-    /** Trims, strips control characters and cuts at [MAX_LABEL]; null when blank. */
+    /** [Labels.clean] plus a warning for each rule that changed the text. */
     private fun cleanLabel(
         label: String,
         path: String,
     ): String? {
-        val withoutControls = label.filterNot { it.isISOControl() }
-        if (withoutControls.length != label.length) warnings += Warning(path, "control characters removed")
-        val cleaned = withoutControls.trim()
-        return when {
-            cleaned.isEmpty() -> {
-                null
-            }
-
-            cleaned.length > MAX_LABEL -> {
-                warnings += Warning(path, "label longer than $MAX_LABEL characters; cut")
-                cleaned.take(MAX_LABEL)
-            }
-
-            else -> {
-                cleaned
-            }
+        if (label.any { it.isISOControl() }) warnings += Warning(path, "control characters removed")
+        if (label.filterNot { it.isISOControl() }.trim().length > Labels.MAX_LENGTH) {
+            warnings += Warning(path, "label longer than ${Labels.MAX_LENGTH} characters; cut")
         }
+        return Labels.clean(label)
     }
 
     fun theme(
@@ -263,8 +251,6 @@ internal class Sanitizer {
 object HomeLimits {
     const val MAX_ROWS = 16
 }
-
-private const val MAX_LABEL = 40
 
 /** `package/class`, the flattened ComponentName form; the class may be relative (`.Main`). */
 private val COMPONENT = Regex("^[A-Za-z][\\w.]*/[\\w.$]+$")
