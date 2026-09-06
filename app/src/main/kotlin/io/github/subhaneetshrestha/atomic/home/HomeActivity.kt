@@ -17,17 +17,17 @@ import io.github.subhaneetshrestha.atomic.R
 import io.github.subhaneetshrestha.atomic.ThemedActivity
 import io.github.subhaneetshrestha.atomic.actions.ActionAvailability
 import io.github.subhaneetshrestha.atomic.actions.ActionGrant
+import io.github.subhaneetshrestha.atomic.actions.ActionLabels
 import io.github.subhaneetshrestha.atomic.actions.ActionRunner
 import io.github.subhaneetshrestha.atomic.actions.AndroidActionEnvironment
 import io.github.subhaneetshrestha.atomic.actions.Availability
+import io.github.subhaneetshrestha.atomic.actions.BuiltinActions
 import io.github.subhaneetshrestha.atomic.actions.LauncherSurfaces
-import io.github.subhaneetshrestha.atomic.actions.UnsupportedReason
 import io.github.subhaneetshrestha.atomic.apps.AppActions
 import io.github.subhaneetshrestha.atomic.apps.AppKey
 import io.github.subhaneetshrestha.atomic.apps.AppLauncher
 import io.github.subhaneetshrestha.atomic.apps.AppRepository
 import io.github.subhaneetshrestha.atomic.core.theme.BindingSurface
-import io.github.subhaneetshrestha.atomic.core.theme.BuiltinId
 import io.github.subhaneetshrestha.atomic.core.theme.EdgeExclusion
 import io.github.subhaneetshrestha.atomic.core.theme.InfoPosition
 import io.github.subhaneetshrestha.atomic.core.theme.Settings
@@ -101,7 +101,9 @@ class HomeActivity :
         val appActions = AppActions(this, repository)
         appMenu = AppMenu(this, settings, appActions)
         environment =
-            AndroidActionEnvironment(this, repository, NoSystemActions, BUILT_SURFACES) { defaultHome.isDefaultHome() }
+            AndroidActionEnvironment(this, repository, NoSystemActions, BuiltinActions.BUILT_SURFACES) {
+                defaultHome.isDefaultHome()
+            }
         runner = ActionRunner(this, environment, this, repository, launcher, appActions, NoSystemActions)
         dispatcher = GestureDispatcher(ActionAvailability(environment))
         list =
@@ -252,47 +254,14 @@ class HomeActivity :
 
             is Dispatch.Explain -> {
                 haptics.rejected()
-                toast(reason(outcome.availability))
+                ActionLabels.reason(this, outcome.availability)?.let(::toast)
             }
         }
     }
 
-    private fun reason(availability: Availability): Int =
-        when (availability) {
-            is Availability.Unsupported -> {
-                when (availability.reason) {
-                    UnsupportedReason.NEEDS_NEWER_ANDROID -> {
-                        R.string.action_needs_newer_android
-                    }
+    private fun toast(message: Int) = toast(getString(message))
 
-                    UnsupportedReason.NO_HARDWARE -> {
-                        R.string.action_no_hardware
-                    }
-
-                    UnsupportedReason.NOT_IN_THIS_VERSION, UnsupportedReason.UNKNOWN_ACTION -> {
-                        R.string.action_not_yet_built
-                    }
-                }
-            }
-
-            Availability.NoHandler -> {
-                R.string.action_no_app
-            }
-
-            Availability.Missing -> {
-                R.string.action_app_gone
-            }
-
-            Availability.NotDefaultLauncher -> {
-                R.string.action_needs_home_role
-            }
-
-            else -> {
-                R.string.action_failed
-            }
-        }
-
-    private fun toast(message: Int) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
     private fun refreshBanner() {
         banner.visibility = if (defaultHome.isDefaultHome()) View.GONE else View.VISIBLE
@@ -300,8 +269,5 @@ class HomeActivity :
 
     private companion object {
         const val TAG = "HomeActivity"
-
-        /** The launcher's own surfaces this version has built; the rest are honestly unavailable. */
-        val BUILT_SURFACES = setOf(BuiltinId.LAUNCHER_SETTINGS, BuiltinId.DEFAULT_LAUNCHER_CHOOSER)
     }
 }

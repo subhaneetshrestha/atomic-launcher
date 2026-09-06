@@ -5,9 +5,11 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.InputType
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListView
@@ -20,17 +22,30 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import io.github.subhaneetshrestha.atomic.R
 import io.github.subhaneetshrestha.atomic.ThemedActivity
+import io.github.subhaneetshrestha.atomic.actions.ActionAvailability
+import io.github.subhaneetshrestha.atomic.actions.ActionLabels
+import io.github.subhaneetshrestha.atomic.actions.AndroidActionEnvironment
+import io.github.subhaneetshrestha.atomic.actions.Availability
+import io.github.subhaneetshrestha.atomic.actions.BuiltinActions
 import io.github.subhaneetshrestha.atomic.apps.AppEntry
 import io.github.subhaneetshrestha.atomic.apps.AppKey
+import io.github.subhaneetshrestha.atomic.core.theme.Action
+import io.github.subhaneetshrestha.atomic.core.theme.ActionGroup
+import io.github.subhaneetshrestha.atomic.core.theme.BindingSurface
+import io.github.subhaneetshrestha.atomic.core.theme.BuiltinId
 import io.github.subhaneetshrestha.atomic.core.theme.BuiltinThemes
 import io.github.subhaneetshrestha.atomic.core.theme.DecodeResult
+import io.github.subhaneetshrestha.atomic.core.theme.EdgeExclusion
 import io.github.subhaneetshrestha.atomic.core.theme.HomeLimits
+import io.github.subhaneetshrestha.atomic.core.theme.LinkRules
 import io.github.subhaneetshrestha.atomic.core.theme.NightMode
 import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.core.theme.Settings
 import io.github.subhaneetshrestha.atomic.core.theme.SettingsCodec
 import io.github.subhaneetshrestha.atomic.core.theme.SettingsEdits
+import io.github.subhaneetshrestha.atomic.home.DefaultHomePrompt
 import io.github.subhaneetshrestha.atomic.home.HomeListModel
+import io.github.subhaneetshrestha.atomic.system.NoSystemActions
 import io.github.subhaneetshrestha.atomic.util.Logs
 import io.github.subhaneetshrestha.atomic.util.Threads
 import java.io.ByteArrayOutputStream
@@ -45,6 +60,13 @@ import java.time.LocalDate
  */
 class SettingsActivity : ThemedActivity() {
     private val settings: SettingsRepository get() = atomicApp.settingsRepository
+    private val availability by lazy {
+        ActionAvailability(
+            AndroidActionEnvironment(this, atomicApp.appRepository, NoSystemActions, BuiltinActions.BUILT_SURFACES) {
+                DefaultHomePrompt(this).isDefaultHome()
+            },
+        )
+    }
     private lateinit var colors: ResolvedColors
     private lateinit var title: TextView
     private lateinit var container: FrameLayout
@@ -97,9 +119,14 @@ class SettingsActivity : ThemedActivity() {
                 }
             },
         )
-        val saved = savedInstanceState?.getIntArray(STATE_STACK)?.map { ScreenId.entries[it] } ?: listOf(ScreenId.MENU)
-        for (id in saved.dropLast(1)) stack.addLast(screenFor(id))
-        push(screenFor(saved.last()))
+        val ids = savedInstanceState?.getIntArray(STATE_STACK) ?: intArrayOf(ScreenId.MENU.ordinal)
+        val args = savedInstanceState?.getIntArray(STATE_ARGS) ?: IntArray(ids.size) { -1 }
+        for (index in ids.indices.take(
+            ids.size - 1,
+        )) {
+            stack.addLast(screenFor(ScreenId.entries[ids[index]], args[index]))
+        }
+        push(screenFor(ScreenId.entries[ids.last()], args.last()))
     }
 
     override fun onStart() {
@@ -116,18 +143,31 @@ class SettingsActivity : ThemedActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putIntArray(STATE_STACK, stack.map { it.id.ordinal }.toIntArray())
+        outState.putIntArray(STATE_ARGS, stack.map { it.arg }.toIntArray())
     }
 
-    private fun screenFor(id: ScreenId): Screen =
+    private fun screenFor(
+        id: ScreenId,
+        arg: Int = -1,
+    ): Screen =
         when (id) {
             ScreenId.MENU -> MenuScreen()
             ScreenId.HOME_APPS -> HomeAppsScreen()
             ScreenId.HIDDEN_APPS -> HiddenAppsScreen()
+            ScreenId.GESTURES -> GesturesScreen()
+            ScreenId.ACTION_PICKER -> ActionPickerScreen(arg)
+            ScreenId.APP_PICKER -> AppPickerScreen(arg)
             ScreenId.THEME -> ThemeScreen()
             ScreenId.APPEARANCE -> AppearanceScreen()
             ScreenId.BACKUP -> BackupScreen()
             ScreenId.ABOUT -> AboutScreen()
         }
+
+    /** Back out to a screen already on the stack, after a choice deeper in has been made. */
+    private fun popTo(id: ScreenId) {
+        while (stack.size > 1 && stack.last().id != id) stack.removeLast()
+        stack.lastOrNull()?.let(::show)
+    }
 
     private fun push(screen: Screen) {
         stack.addLast(screen)
@@ -167,12 +207,26 @@ class SettingsActivity : ThemedActivity() {
 
     // ---- screens ------------------------------------------------------------------------------
 
-    private enum class ScreenId { MENU, HOME_APPS, HIDDEN_APPS, THEME, APPEARANCE, BACKUP, ABOUT }
+    private enum class ScreenId {
+        MENU,
+        HOME_APPS,
+        HIDDEN_APPS,
+        GESTURES,
+        ACTION_PICKER,
+        APP_PICKER,
+        THEME,
+        APPEARANCE,
+        BACKUP,
+        ABOUT,
+    }
 
     private abstract inner class Screen(
         val id: ScreenId,
         val titleRes: Int,
     ) {
+        /** Which surface this screen is about, for the two that need one; -1 otherwise. */
+        open val arg: Int = -1
+
         abstract fun createView(): View
 
         open fun refresh() = Unit
@@ -184,6 +238,7 @@ class SettingsActivity : ThemedActivity() {
                 listOf(
                     R.string.settings_home_apps to { push(HomeAppsScreen()) },
                     R.string.settings_hidden_apps to { push(HiddenAppsScreen()) },
+                    R.string.settings_gestures to { push(GesturesScreen()) },
                     R.string.settings_theme to { push(ThemeScreen()) },
                     R.string.settings_appearance to { push(AppearanceScreen()) },
                     R.string.settings_backup to { push(BackupScreen()) },
@@ -318,6 +373,164 @@ class SettingsActivity : ThemedActivity() {
                     )
                 }
             adapter.notifyDataSetChanged()
+        }
+    }
+
+    /** Everything the home screen answers to, and what each one does at the moment. */
+    private inner class GesturesScreen : Screen(ScreenId.GESTURES, R.string.settings_gestures) {
+        private lateinit var adapter: RowAdapter
+
+        override fun createView(): View {
+            adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
+            refresh()
+            return list(adapter, onClick = ::choose)
+        }
+
+        override fun refresh() {
+            val gestures = settings.settings.gestures
+            adapter.rows =
+                listOf(
+                    Row(getString(R.string.gestures_haptics), checked = gestures.haptics),
+                    Row(
+                        getString(R.string.gestures_edges),
+                        getString(R.string.gestures_edges_detail),
+                        checked = gestures.edgeExclusion == EdgeExclusion.BOTH,
+                    ),
+                ) + BindingSurface.all.map { Row(ActionLabels.of(this@SettingsActivity, it), boundTo(it)) }
+            adapter.notifyDataSetChanged()
+        }
+
+        /** What it does, and why that would not work if it would not. */
+        private fun boundTo(surface: BindingSurface): String {
+            val action = settings.settings.binding(surface)
+            val described = ActionLabels.describe(this@SettingsActivity, action, atomicApp.appRepository)
+            val problem = ActionLabels.reason(this@SettingsActivity, availability.of(action))
+            return if (problem == null) described else "$described \u2014 $problem"
+        }
+
+        private fun choose(position: Int) {
+            when (position) {
+                0 -> {
+                    settings.update { it.copy(gestures = it.gestures.copy(haptics = !it.gestures.haptics)) }
+                }
+
+                1 -> {
+                    settings.update {
+                        val next =
+                            if (it.gestures.edgeExclusion ==
+                                EdgeExclusion.BOTH
+                            ) {
+                                EdgeExclusion.NONE
+                            } else {
+                                EdgeExclusion.BOTH
+                            }
+                        it.copy(gestures = it.gestures.copy(edgeExclusion = next))
+                    }
+                }
+
+                else -> {
+                    push(ActionPickerScreen(position - GESTURE_HEADER_ROWS))
+                }
+            }
+        }
+    }
+
+    /** What one surface should do. Everything is listed; what cannot run says why and stays unselectable. */
+    private inner class ActionPickerScreen(
+        override val arg: Int,
+    ) : Screen(ScreenId.ACTION_PICKER, R.string.picker_title) {
+        private val surface: BindingSurface = BindingSurface.all[arg.coerceIn(BindingSurface.all.indices)]
+        private val rows = mutableListOf<Row>()
+        private val choices = mutableListOf<() -> Unit>()
+
+        override fun createView(): View {
+            build()
+            return list(RowAdapter(this@SettingsActivity, colors, rows), onClick = { choices[it]() })
+        }
+
+        private fun add(
+            row: Row,
+            choice: () -> Unit,
+        ) {
+            rows += row
+            choices += choice
+        }
+
+        private fun build() {
+            rows.clear()
+            choices.clear()
+            add(Row(getString(R.string.action_none))) { bindAndReturn(Action.None) }
+            add(Row(getString(R.string.action_use_default))) { bindAndReturn(null) }
+            add(Row(getString(R.string.action_open_app))) { push(AppPickerScreen(arg)) }
+            add(Row(getString(R.string.action_open_link))) { askForLink() }
+            for (group in ActionGroup.entries) {
+                add(Row(ActionLabels.of(this@SettingsActivity, group), isHeader = true), choice = {})
+                for (id in BuiltinId.entries.filter { it.group == group }) {
+                    val action = Action.Builtin(id)
+                    val state = availability.of(action)
+                    val problem = ActionLabels.reason(this@SettingsActivity, state)
+                    val usable = state == Availability.Available || state is Availability.NeedsGrant
+                    add(Row(ActionLabels.of(this@SettingsActivity, id), problem, enabled = usable)) {
+                        if (usable) bindAndReturn(action) else problem?.let(::toast)
+                    }
+                }
+            }
+        }
+
+        private fun askForLink() {
+            val input =
+                EditText(this@SettingsActivity).apply {
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+                    setHint(R.string.action_link_hint)
+                    (settings.settings.binding(surface) as? Action.OpenUrl)?.let { setText(it.url) }
+                }
+            val pad = dp(20)
+            val container = FrameLayout(this@SettingsActivity).apply { setPadding(pad, pad / 2, pad, 0) }
+            container.addView(input)
+            AlertDialog
+                .Builder(this@SettingsActivity)
+                .setTitle(R.string.action_open_link)
+                .setView(container)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    val url = input.text.toString().trim()
+                    if (LinkRules.isOpenable(url)) {
+                        bindAndReturn(Action.OpenUrl(url))
+                    } else {
+                        toast(getString(R.string.link_not_valid))
+                    }
+                }.setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+
+        private fun bindAndReturn(action: Action?) {
+            settings.update { SettingsEdits.bind(it, surface, action) }
+            popTo(ScreenId.GESTURES)
+        }
+    }
+
+    private inner class AppPickerScreen(
+        override val arg: Int,
+    ) : Screen(ScreenId.APP_PICKER, R.string.action_open_app) {
+        override fun createView(): View {
+            val entries = atomicApp.appRepository.current.entries
+            val adapter =
+                RowAdapter(
+                    this@SettingsActivity,
+                    colors,
+                    entries.map { Row(settings.current.labelOverrides[it.key] ?: it.label) },
+                )
+            return list(adapter, onClick = { position ->
+                val key = entries[position].key
+                val surface = BindingSurface.all[arg.coerceIn(BindingSurface.all.indices)]
+                settings.update {
+                    SettingsEdits.bind(
+                        it,
+                        surface,
+                        Action.OpenApp(key.flattenedComponent, key.userSerial),
+                    )
+                }
+                popTo(ScreenId.GESTURES)
+            })
         }
     }
 
@@ -545,6 +758,10 @@ class SettingsActivity : ThemedActivity() {
     private companion object {
         const val TAG = "SettingsActivity"
         const val STATE_STACK = "stack"
+        const val STATE_ARGS = "args"
+
+        /** The haptics and edge rows sit above the list of surfaces. */
+        const val GESTURE_HEADER_ROWS = 2
         const val MAX_IMPORT_BYTES = 1_000_000
     }
 }
