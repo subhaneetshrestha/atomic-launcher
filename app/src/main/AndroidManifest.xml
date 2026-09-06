@@ -65,6 +65,22 @@
             android:name=".settings.SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title" />
+
+        <!--
+            Notification badges. Exported because the system binds it, and guarded by the
+            BIND_NOTIFICATION_LISTENER_SERVICE permission so only the system can. It does nothing
+            until the user grants notification access in Settings, and asks to be unbound while
+            the badge setting is off.
+        -->
+        <service
+            android:name=".notifications.BadgeNotificationListener"
+            android:exported="true"
+            android:label="@string/badges_service_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

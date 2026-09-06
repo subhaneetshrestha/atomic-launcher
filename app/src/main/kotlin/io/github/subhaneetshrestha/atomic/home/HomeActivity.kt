@@ -37,6 +37,8 @@ import io.github.subhaneetshrestha.atomic.gestures.GestureDispatcher
 import io.github.subhaneetshrestha.atomic.gestures.GestureEvent
 import io.github.subhaneetshrestha.atomic.gestures.Haptics
 import io.github.subhaneetshrestha.atomic.home.info.InfoLinesView
+import io.github.subhaneetshrestha.atomic.notifications.BadgeStore
+import io.github.subhaneetshrestha.atomic.notifications.NotificationAccess
 import io.github.subhaneetshrestha.atomic.search.AppSearchIndex
 import io.github.subhaneetshrestha.atomic.search.SearchOverlay
 import io.github.subhaneetshrestha.atomic.settings.SettingsActivity
@@ -75,6 +77,7 @@ class HomeActivity :
     private val roleRequest =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshBanner() }
     private val snapshotListener = AppRepository.Listener { render() }
+    private val badgeListener = BadgeStore.Listener { render() }
     private val documentListener: (Settings, Settings) -> Unit = { old, new ->
         if (old.appearance.nightMode != new.appearance.nightMode) recreate() else render()
     }
@@ -117,6 +120,7 @@ class HomeActivity :
                     appMenu.show(entry, view, visibleRows)
                     true
                 }
+                badgeCount = { entry -> atomicApp.badges.countFor(entry.key.packageName, entry.key.userSerial) }
             }
         infoLines = InfoLinesView(this, applier).apply { onSurface = ::onSurfaceTouched }
         block = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -161,6 +165,7 @@ class HomeActivity :
         super.onStart()
         repository.addListener(snapshotListener)
         settings.addDocumentListener(documentListener)
+        atomicApp.badges.store.addListener(badgeListener)
         infoLines.onStart()
         render()
     }
@@ -168,6 +173,8 @@ class HomeActivity :
     override fun onResume() {
         super.onResume()
         refreshBanner()
+        // The user may have granted or revoked notification access while we were away.
+        atomicApp.badges.onAccessChanged(NotificationAccess.isGranted(this))
         repository.ensureFresh(resources.configuration.locales)
     }
 
@@ -177,6 +184,7 @@ class HomeActivity :
         searchOverlay.close()
         repository.removeListener(snapshotListener)
         settings.removeDocumentListener(documentListener)
+        atomicApp.badges.store.removeListener(badgeListener)
         infoLines.onStop()
         settings.flush()
         super.onStop()

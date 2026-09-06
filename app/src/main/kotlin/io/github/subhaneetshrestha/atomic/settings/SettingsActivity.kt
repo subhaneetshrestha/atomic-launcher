@@ -13,6 +13,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -34,17 +35,23 @@ import io.github.subhaneetshrestha.atomic.core.theme.ActionGroup
 import io.github.subhaneetshrestha.atomic.core.theme.BindingSurface
 import io.github.subhaneetshrestha.atomic.core.theme.BuiltinId
 import io.github.subhaneetshrestha.atomic.core.theme.BuiltinThemes
+import io.github.subhaneetshrestha.atomic.core.theme.ConsentKind
 import io.github.subhaneetshrestha.atomic.core.theme.DecodeResult
 import io.github.subhaneetshrestha.atomic.core.theme.EdgeExclusion
 import io.github.subhaneetshrestha.atomic.core.theme.HomeLimits
 import io.github.subhaneetshrestha.atomic.core.theme.LinkRules
 import io.github.subhaneetshrestha.atomic.core.theme.NightMode
+import io.github.subhaneetshrestha.atomic.core.theme.PackageRef
 import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.core.theme.Settings
 import io.github.subhaneetshrestha.atomic.core.theme.SettingsCodec
 import io.github.subhaneetshrestha.atomic.core.theme.SettingsEdits
 import io.github.subhaneetshrestha.atomic.home.DefaultHomePrompt
 import io.github.subhaneetshrestha.atomic.home.HomeListModel
+import io.github.subhaneetshrestha.atomic.notifications.NotificationAccess
+import io.github.subhaneetshrestha.atomic.settings.grant.Grants
+import io.github.subhaneetshrestha.atomic.settings.grant.InstallSourceProbe
+import io.github.subhaneetshrestha.atomic.settings.grant.Restriction
 import io.github.subhaneetshrestha.atomic.system.NoSystemActions
 import io.github.subhaneetshrestha.atomic.util.Logs
 import io.github.subhaneetshrestha.atomic.util.Threads
@@ -134,6 +141,16 @@ class SettingsActivity : ThemedActivity() {
         settings.addDocumentListener(documentListener)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // The user may have granted or revoked access in Settings while we were away.
+        atomicApp.badges.onAccessChanged(NotificationAccess.isGranted(this))
+        when (val top = stack.lastOrNull()) {
+            is GrantScreen -> top.onReturn()
+            else -> top?.refresh()
+        }
+    }
+
     override fun onStop() {
         settings.removeDocumentListener(documentListener)
         settings.flush()
@@ -155,6 +172,10 @@ class SettingsActivity : ThemedActivity() {
             ScreenId.HOME_APPS -> HomeAppsScreen()
             ScreenId.HIDDEN_APPS -> HiddenAppsScreen()
             ScreenId.GESTURES -> GesturesScreen()
+            ScreenId.BADGES -> BadgesScreen()
+            ScreenId.BADGE_APPS -> BadgeAppsScreen()
+            ScreenId.GRANT -> GrantScreen(if (arg < 0) ConsentKind.NOTIFICATION_ACCESS.ordinal else arg)
+            ScreenId.RESTRICTED_HELP -> RestrictedHelpScreen()
             ScreenId.ACTION_PICKER -> ActionPickerScreen(arg)
             ScreenId.APP_PICKER -> AppPickerScreen(arg)
             ScreenId.THEME -> ThemeScreen()
@@ -203,6 +224,44 @@ class SettingsActivity : ThemedActivity() {
             if (onLongClick != null) setOnItemLongClickListener { _, _, position, _ -> onLongClick(position) }
         }
 
+    /** A screen of prose with tappable actions under it: disclosures and help pages. */
+    private fun page(
+        paragraphs: List<String>,
+        actions: List<Pair<String, () -> Unit>>,
+    ): View {
+        val column =
+            LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(20), dp(4), dp(20), dp(24))
+            }
+        for (paragraph in paragraphs) {
+            column.addView(
+                TextView(this).apply {
+                    text = paragraph
+                    setTextColor(colors.text)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    setLineSpacing(0f, 1.2f)
+                    setPadding(0, dp(8), 0, dp(8))
+                },
+            )
+        }
+        for ((label, run) in actions) {
+            column.addView(
+                TextView(this).apply {
+                    text = label
+                    setTextColor(colors.accent)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+                    gravity = Gravity.CENTER_VERTICAL
+                    minHeight = dp(56)
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener { run() }
+                },
+            )
+        }
+        return ScrollView(this).apply { addView(column) }
+    }
+
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
 
     // ---- screens ------------------------------------------------------------------------------
@@ -212,6 +271,10 @@ class SettingsActivity : ThemedActivity() {
         HOME_APPS,
         HIDDEN_APPS,
         GESTURES,
+        BADGES,
+        BADGE_APPS,
+        GRANT,
+        RESTRICTED_HELP,
         ACTION_PICKER,
         APP_PICKER,
         THEME,
@@ -239,6 +302,7 @@ class SettingsActivity : ThemedActivity() {
                     R.string.settings_home_apps to { push(HomeAppsScreen()) },
                     R.string.settings_hidden_apps to { push(HiddenAppsScreen()) },
                     R.string.settings_gestures to { push(GesturesScreen()) },
+                    R.string.settings_badges to { push(BadgesScreen()) },
                     R.string.settings_theme to { push(ThemeScreen()) },
                     R.string.settings_appearance to { push(AppearanceScreen()) },
                     R.string.settings_backup to { push(BackupScreen()) },
@@ -739,6 +803,229 @@ class SettingsActivity : ThemedActivity() {
             }
         }
     }
+
+    /** Notification badges: the switch, what counts, and the apps left out. */
+    private inner class BadgesScreen : Screen(ScreenId.BADGES, R.string.settings_badges) {
+        private lateinit var adapter: RowAdapter
+
+        override fun createView(): View {
+            adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
+            refresh()
+            return list(adapter, onClick = ::tap)
+        }
+
+        override fun refresh() {
+            if (!::adapter.isInitialized) return
+            val config = settings.settings.notifications
+            val supported = NotificationAccess.isSupported(this@SettingsActivity)
+            val granted = NotificationAccess.isGranted(this@SettingsActivity)
+            val state =
+                when {
+                    !supported -> R.string.badges_state_unsupported
+                    granted -> R.string.badges_state_granted
+                    else -> R.string.badges_state_needed
+                }
+            val silenced = config.perAppDisabled.size
+            adapter.rows =
+                listOf(
+                    Row(
+                        getString(R.string.badges_show),
+                        getString(state),
+                        checked = config.enabled,
+                        enabled = supported,
+                    ),
+                    Row(
+                        getString(R.string.badges_ongoing),
+                        getString(R.string.badges_ongoing_detail),
+                        checked = config.includeOngoing,
+                        enabled = config.enabled,
+                    ),
+                    Row(
+                        getString(R.string.badges_per_app),
+                        if (silenced == 0) {
+                            getString(R.string.badges_per_app_none)
+                        } else {
+                            getString(R.string.badges_per_app_detail, silenced, badgeApps().size)
+                        },
+                        enabled = config.enabled,
+                    ),
+                )
+            adapter.notifyDataSetChanged()
+        }
+
+        private fun tap(position: Int) {
+            val config = settings.settings.notifications
+            when (position) {
+                0 -> {
+                    when {
+                        !NotificationAccess.isSupported(this@SettingsActivity) -> {
+                            toast(getString(R.string.badges_state_unsupported))
+                        }
+
+                        config.enabled -> {
+                            settings.update { it.copy(notifications = it.notifications.copy(enabled = false)) }
+                        }
+
+                        // Access first, and only after the disclosure: the switch here is what
+                        // asks for it, so this is the moment to explain what it means.
+                        !NotificationAccess.isGranted(this@SettingsActivity) -> {
+                            push(GrantScreen(ConsentKind.NOTIFICATION_ACCESS.ordinal))
+                        }
+
+                        else -> {
+                            settings.update { it.copy(notifications = it.notifications.copy(enabled = true)) }
+                        }
+                    }
+                }
+
+                1 -> {
+                    if (!config.enabled) {
+                        toast(getString(R.string.badges_needs_access))
+                    } else {
+                        settings.update {
+                            it.copy(notifications = it.notifications.copy(includeOngoing = !config.includeOngoing))
+                        }
+                    }
+                }
+
+                else -> {
+                    if (!config.enabled) toast(getString(R.string.badges_needs_access)) else push(BadgeAppsScreen())
+                }
+            }
+        }
+    }
+
+    /** One row per app, checked while that app may show a badge. Badges are counted per app. */
+    private inner class BadgeAppsScreen : Screen(ScreenId.BADGE_APPS, R.string.badges_per_app_title) {
+        private lateinit var adapter: RowAdapter
+        private var apps: List<AppEntry> = emptyList()
+
+        override fun createView(): View {
+            adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
+            refresh()
+            return list(adapter, onClick = ::toggle)
+        }
+
+        override fun refresh() {
+            if (!::adapter.isInitialized) return
+            val silenced = settings.settings.notifications.perAppDisabled
+            apps = badgeApps()
+            adapter.rows =
+                apps.map { entry ->
+                    Row(
+                        settings.current.labelOverrides[entry.key] ?: entry.label,
+                        checked = refOf(entry) !in silenced,
+                    )
+                }
+            adapter.notifyDataSetChanged()
+        }
+
+        private fun toggle(position: Int) {
+            val entry = apps.getOrNull(position) ?: return
+            val app = refOf(entry)
+            val shown = app !in settings.settings.notifications.perAppDisabled
+            settings.update { SettingsEdits.setBadges(it, app, shown = !shown) }
+        }
+    }
+
+    /**
+     * The prominent disclosure for a special access: what is read, what it is for, and what the
+     * limits are, followed by the user's own decision. Settings is only opened from Continue.
+     */
+    private inner class GrantScreen(
+        private val kind: Int,
+    ) : Screen(ScreenId.GRANT, Grants.of(ConsentKind.entries[kind]).titleRes) {
+        override val arg: Int get() = kind
+
+        private val spec = Grants.of(ConsentKind.entries[kind])
+        private var handedOver = false
+
+        override fun createView(): View {
+            val restriction = InstallSourceProbe.restriction(this@SettingsActivity)
+            val actions =
+                buildList {
+                    add(getString(R.string.grant_continue) to ::openSettings)
+                    add(getString(R.string.grant_not_now) to { pop() })
+                    if (restriction != Restriction.NO) {
+                        add(getString(R.string.restricted_title) to { push(RestrictedHelpScreen()) })
+                    }
+                }
+            return page(
+                paragraphs = listOf(getString(spec.whatRes), getString(spec.whyRes), getString(spec.limitsRes)),
+                actions = actions,
+            )
+        }
+
+        private fun openSettings() {
+            // Tapping Continue is the affirmative action the disclosure asked for; note when.
+            settings.update {
+                SettingsEdits.recordConsent(it, ConsentKind.entries[kind], System.currentTimeMillis())
+            }
+            for (intent in spec.intents(this@SettingsActivity)) {
+                try {
+                    startActivity(intent)
+                    handedOver = true
+                    return
+                } catch (e: ActivityNotFoundException) {
+                    Logs.w(TAG, "no activity for ${intent.action}", e)
+                }
+            }
+            toast(getString(R.string.grant_no_settings))
+        }
+
+        /** Called when Settings hands the user back: check rather than assume. */
+        fun onReturn() {
+            if (!handedOver) return
+            handedOver = false
+            if (spec.isGranted(this@SettingsActivity)) {
+                // They came here to turn badges on, so turn them on.
+                settings.update { it.copy(notifications = it.notifications.copy(enabled = true)) }
+                toast(getString(R.string.grant_granted))
+                popTo(ScreenId.BADGES)
+                return
+            }
+            toast(getString(R.string.grant_not_granted))
+            if (InstallSourceProbe.restriction(this@SettingsActivity) != Restriction.NO) push(RestrictedHelpScreen())
+        }
+    }
+
+    /** Android 13 and later: why the switch did nothing, and how to allow it. */
+    private inner class RestrictedHelpScreen : Screen(ScreenId.RESTRICTED_HELP, R.string.restricted_title) {
+        override fun createView(): View {
+            val certain = InstallSourceProbe.restriction(this@SettingsActivity) == Restriction.LIKELY
+            return page(
+                paragraphs =
+                    listOf(
+                        getString(if (certain) R.string.restricted_why else R.string.restricted_why_maybe),
+                        getString(R.string.restricted_steps),
+                    ),
+                actions =
+                    listOf(
+                        getString(R.string.restricted_open) to ::openAppInfo,
+                        getString(R.string.restricted_try_again) to { pop() },
+                    ),
+            )
+        }
+
+        private fun openAppInfo() {
+            val intent =
+                Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(Uri.fromParts("package", packageName, null))
+            try {
+                startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                Logs.w(TAG, "no app info screen", e)
+                toast(getString(R.string.grant_no_settings))
+            }
+        }
+    }
+
+    /** One row per app rather than per launchable activity: a badge belongs to the whole app. */
+    private fun badgeApps(): List<AppEntry> =
+        atomicApp.appRepository.current.entries
+            .distinctBy { it.key.packageName to it.key.userSerial }
+
+    private fun refOf(entry: AppEntry): PackageRef = PackageRef(entry.key.packageName, entry.key.userSerial)
 
     /** Reads up to [max] bytes; a settings file is a few kilobytes, so anything larger is not one. */
     private fun readAtMost(

@@ -1,6 +1,7 @@
 package io.github.subhaneetshrestha.atomic.settings
 
 import io.github.subhaneetshrestha.atomic.apps.AppKey
+import io.github.subhaneetshrestha.atomic.core.theme.Badge
 
 enum class HorizontalAlignment { START, CENTER, END }
 
@@ -34,6 +35,8 @@ data class HomeSettings(
     val autoShowKeyboard: Boolean = true,
     val webSearchFallback: Boolean = false,
     val font: FontSpec = FontSpec(),
+    /** How a notification count is drawn beside a name. */
+    val badge: Badge = Badge(),
     /** Touch-target floor; rows never shrink below this even at small text sizes. */
     val rowMinHeightDp: Int = 48,
     val rowGapDp: Int = 4,

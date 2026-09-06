@@ -13,6 +13,7 @@ import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.core.theme.ThemeResolver
 import io.github.subhaneetshrestha.atomic.diagnostics.CrashEnvironment
 import io.github.subhaneetshrestha.atomic.diagnostics.CrashRecorder
+import io.github.subhaneetshrestha.atomic.notifications.BadgeController
 import io.github.subhaneetshrestha.atomic.settings.NightModes
 import io.github.subhaneetshrestha.atomic.settings.SettingsRepository
 import io.github.subhaneetshrestha.atomic.settings.TokenColors
@@ -34,6 +35,9 @@ class AtomicApp : Application() {
         private set
 
     lateinit var crashEnvironment: CrashEnvironment
+        private set
+
+    lateinit var badges: BadgeController
         private set
 
     /** The first-run setup is offered once per process; the persisted flag decides across processes. */
@@ -61,6 +65,7 @@ class AtomicApp : Application() {
         }
         // A later phase skips all of this when running in the accessibility service's own process.
         appRepository = AppRepository(this).also { it.start() }
+        badges = BadgeController(this, settingsRepository).also { it.start() }
     }
 
     /** The current theme's colours for [context]'s day/night state. */

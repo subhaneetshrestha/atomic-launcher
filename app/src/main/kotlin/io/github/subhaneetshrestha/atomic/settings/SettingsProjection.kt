@@ -46,6 +46,7 @@ fun Settings.toHomeSettings(): HomeSettings {
                 weight = theme.typography.weight,
                 italic = theme.typography.italic,
             ),
+        badge = theme.badge,
         rowGapDp = theme.layout.rowGapDp,
         horizontalPaddingDp = theme.layout.paddingDp.h,
         verticalPaddingDp = theme.layout.paddingDp.v,

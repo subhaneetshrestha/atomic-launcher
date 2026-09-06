@@ -6,7 +6,10 @@ import android.os.Build
 import android.util.TypedValue
 import android.view.Gravity
 import android.widget.TextView
+import io.github.subhaneetshrestha.atomic.R
+import io.github.subhaneetshrestha.atomic.core.theme.BadgePosition
 import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
+import io.github.subhaneetshrestha.atomic.notifications.BadgeDrawable
 import io.github.subhaneetshrestha.atomic.settings.FontSpec
 import io.github.subhaneetshrestha.atomic.settings.HomeSettings
 import io.github.subhaneetshrestha.atomic.settings.HorizontalAlignment
@@ -75,6 +78,51 @@ class ThemeApplier(
             horizontalGravity(settings.horizontalAlignment),
             settings.rowMinHeightDp,
         )
+    }
+
+    /**
+     * Puts [count]'s badge on a row, or takes it off when there is nothing waiting. The badge is
+     * a compound drawable, so the row's text shortens to make room for it rather than sliding
+     * under it, and the whole row stays one accessible, clickable view.
+     */
+    fun applyBadge(
+        row: TextView,
+        badgeDrawable: BadgeDrawable,
+        count: Int,
+        settings: HomeSettings,
+        colors: ResolvedColors,
+    ) {
+        val shown =
+            badgeDrawable.update(
+                count = count,
+                badge = settings.badge,
+                typeface = row.typeface ?: typeface(settings.font),
+                textSizePx = row.textSize,
+                background = colors.badgeBackground,
+                text = colors.badgeText,
+            )
+        row.compoundDrawablePadding = if (shown) badgeDrawable.gapPx else 0
+        // The badge is drawn, not written, so the count would be invisible to a screen reader
+        // (and to anything else reading the screen) unless the row says it out loud.
+        row.contentDescription =
+            if (shown) {
+                context.resources.getQuantityString(R.plurals.badge_a11y, count, row.text, count)
+            } else {
+                null
+            }
+        when {
+            !shown -> {
+                row.setCompoundDrawablesRelative(null, null, null, null)
+            }
+
+            settings.badge.position == BadgePosition.START -> {
+                row.setCompoundDrawablesRelative(badgeDrawable, null, null, null)
+            }
+
+            else -> {
+                row.setCompoundDrawablesRelative(null, null, badgeDrawable, null)
+            }
+        }
     }
 
     /** Clock, date, battery: same family, own size and colour, same touch-target floor as rows. */

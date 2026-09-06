@@ -7,6 +7,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.subhaneetshrestha.atomic.apps.AppEntry
 import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
+import io.github.subhaneetshrestha.atomic.notifications.BadgeDrawable
 import io.github.subhaneetshrestha.atomic.settings.HomeSettings
 
 /**
@@ -20,6 +21,11 @@ class HomeListView(
 ) : LinearLayout(context) {
     var onRowClick: ((AppEntry, View) -> Unit)? = null
     var onRowLongClick: ((AppEntry, View) -> Boolean)? = null
+
+    /** How many notifications are waiting for an app; nought means no badge. */
+    var badgeCount: ((AppEntry) -> Int)? = null
+
+    private val badges = ArrayList<BadgeDrawable>()
 
     init {
         orientation = VERTICAL
@@ -35,12 +41,14 @@ class HomeListView(
         while (childCount < rows.size) addView(newRow())
 
         val gap = applier.dp(settings.rowGapDp)
+        while (badges.size < rows.size) badges += BadgeDrawable()
         rows.forEachIndexed { index, row ->
             val view = getChildAt(index) as TextView
             view.tag = row.entry
             view.text = row.label
             view.alpha = if (row.entry.isSuspended) SUSPENDED_ALPHA else 1f
             applier.applyRow(view, settings, colors)
+            applier.applyBadge(view, badges[index], badgeCount?.invoke(row.entry) ?: 0, settings, colors)
             (view.layoutParams as LayoutParams).topMargin = if (index == 0) 0 else gap
         }
         requestLayout()

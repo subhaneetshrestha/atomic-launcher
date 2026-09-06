@@ -161,4 +161,42 @@
     <string name="search_hint">Search apps</string>
     <string name="search_no_results">Nothing matches</string>
     <string name="search_web">Search the web for \u201c%1$s\u201d</string>
+    <!-- Notification badges -->
+    <string name="badges_service_label">atomic badges</string>
+    <string name="settings_badges">Notification badges</string>
+    <string name="badges_show">Show notification badges</string>
+    <string name="badges_show_detail">A count beside an app\u2019s name on the home screen.</string>
+    <string name="badges_state_granted">Notification access is on.</string>
+    <string name="badges_state_needed">Needs notification access.</string>
+    <string name="badges_state_unsupported">This phone cannot do this: Android does not run notification listeners on devices with little memory.</string>
+    <string name="badges_ongoing">Count ongoing notifications</string>
+    <string name="badges_ongoing_detail">Music, downloads and anything else that sits in the shade rather than arriving.</string>
+    <string name="badges_per_app">Apps without badges</string>
+    <string name="badges_per_app_detail">%1$d of %2$d apps</string>
+    <string name="badges_per_app_none">Every app can show a badge</string>
+    <string name="badges_per_app_title">Apps without badges</string>
+    <string name="badges_needs_access">Turn on notification access first</string>
+    <plurals name="badge_a11y">
+        <item quantity="one">%1$s, %2$d notification</item>
+        <item quantity="other">%1$s, %2$d notifications</item>
+    </plurals>
+
+    <!-- Notification access: the disclosure shown before Settings is opened -->
+    <string name="grant_notification_title">Notification access</string>
+    <string name="grant_notification_what">To count what is waiting for each app, atomic needs Android\u2019s notification access. Android asks for this in Settings; the next screen is Settings, not atomic.</string>
+    <string name="grant_notification_why">atomic reads which app posted a notification, how many that app has, and whether Android allows a badge for it. It checks whether a notification has any text at all, so that an empty placeholder is not counted, and never reads what that text says.</string>
+    <string name="grant_notification_limits">Nothing is written down and nothing leaves your phone. The counts are held while atomic is running and are gone when it stops. You can turn badges off for any app, and you can take this access away in Settings whenever you like.</string>
+    <string name="grant_continue">Continue to Settings</string>
+    <string name="grant_not_now">Not now</string>
+    <string name="grant_no_settings">This phone has no screen for that</string>
+    <string name="grant_granted">Notification access is on. Badges are showing.</string>
+    <string name="grant_not_granted">Notification access is still off.</string>
+
+    <!-- Android 13 and later: the switch does nothing until restricted settings are allowed -->
+    <string name="restricted_title">If the switch does nothing</string>
+    <string name="restricted_why">Android blocks notification access for apps installed from a file rather than from a store. The switch is there, but tapping it does nothing until you allow it.</string>
+    <string name="restricted_why_maybe">Android blocks notification access for some apps installed outside a store. If the switch did nothing when you tapped it, this is why.</string>
+    <string name="restricted_steps">1. Open App info for atomic.\n2. Tap the three dots in the top corner.\n3. Tap \u201cAllow restricted settings\u201d.\n4. Come back and try the switch again.</string>
+    <string name="restricted_open">Open App info</string>
+    <string name="restricted_try_again">Try the switch again</string>
 </resources>
