@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase 2 acceptance checks against a booted emulator or device (debug build).
+# HARNESS_V2 — Phase 2 acceptance checks against a booted emulator or device (debug build).
 #   scripts/verify-settings.sh <adb serial>
 # Drives the first-run setup, the settings screens and the app menu through uiautomator, and
 # reads the persisted document back with run-as. Backup export/import needs the document picker
@@ -34,6 +34,9 @@ long_press_text() { # hold on the node with this text; returns 1 when absent
 }
 # Text of every node of a class, independent of attribute order inside the node.
 texts_of_class() { grep -o "<node[^>]*class=\"$1\"[^>]*>" <<<"$2" | grep -o 'text="[^"]*"' | sed 's/text="\(.*\)"/\1/' | grep -v '^$'; }
+# Empties a focused text field: cursor to the end, then one delete per possible character.
+# (--longpress DEL is not a delete-all on every API level; a label is at most 40 characters.)
+clear_field() { sh input keyevent KEYCODE_MOVE_END >/dev/null; local dels=""; for _ in $(seq 1 44); do dels="$dels KEYCODE_DEL"; done; sh input keyevent $dels >/dev/null 2>&1 || for _ in $(seq 1 44); do sh input keyevent KEYCODE_DEL >/dev/null; done; }
 settings_json() { sh run-as "$PKG" cat files/settings.json; }
 home_rows() { grep -o "<node[^>]*package=\"$PKG\"[^>]*>" <<<"$1" | grep 'class="android.widget.TextView"' | grep -o 'text="[^"]\+"' | sed 's/text="\(.*\)"/\1/'; }
 crash_count() { $ADB logcat -d -b crash 2>/dev/null | tr -d '\r' | grep -c "$PKG" || true; }
@@ -108,7 +111,7 @@ if [ -z "$row" ]; then ko "no app row found for the menu checks"; else
 long_press_text "$row" || ko "long-press on the row"
 ui=$(dump); has_text "Rename" "$ui" && has_text "App info" "$ui" && ok "long-press on a row opens the app menu" || ko "long-press on a row opens the app menu"
 tap_text "Rename" || ko "Rename item"
-sh input keyevent KEYCODE_MOVE_END >/dev/null; sh input keyevent --longpress KEYCODE_DEL >/dev/null; sh input text "Renamed" >/dev/null; wait_s 1
+clear_field; sh input text "Renamed" >/dev/null; wait_s 1
 tap_text "OK" || ko "OK button of the rename dialog"
 has_text "Renamed" "$(dump)" && ok "renamed row shows the new label" || ko "renamed row shows the new label"
 grep -q '"label": "Renamed"' <<<"$(settings_json)" && ok "rename persisted" || ko "rename persisted"
