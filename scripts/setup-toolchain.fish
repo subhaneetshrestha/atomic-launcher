@@ -7,7 +7,7 @@
 
 set -g SDK /opt/android-sdk
 set -g JDK /usr/lib/jvm/java-17-openjdk
-set -g SDKM $SDK/cmdline-tools/latest/bin/sdkmanager
+set -g ACLI $SDK/cmdline-tools/latest/bin/android   # sdkmanager is only a shim for this now
 set -g AVDM $SDK/cmdline-tools/latest/bin/avdmanager
 
 function step
@@ -26,7 +26,7 @@ test -x $JDK/bin/java; or die "JDK 17 not found at $JDK"
 step "2/7 AUR packages: Android SDK command-line tools, platform-tools, build-tools, platforms 36 + 37, emulator"
 # android-platform = the current platform (API 37 at the time of writing); android-platform-36 = API 36.
 paru -S --needed android-sdk-cmdline-tools-latest android-sdk-platform-tools android-sdk-build-tools android-platform android-platform-36 android-emulator; or die "AUR install failed"
-test -x $SDKM; or die "sdkmanager not found at $SDKM"
+test -x $ACLI; or die "android CLI not found at $ACLI"
 
 step "3/7 Make $SDK writable for your user"
 getent group android-sdk >/dev/null; or sudo groupadd android-sdk
@@ -37,16 +37,29 @@ end
 sudo chown -R $USER:android-sdk $SDK
 sudo chmod -R u+rwX,g+rwX $SDK
 sudo find $SDK -type d -exec chmod g+s '{}' +
+# The AUR platform packages symlink package.xml to root-owned files under /usr/share/licenses.
+# The Android CLI rewrites that metadata after every install, so turn the links into writable copies.
+for f in $SDK/platforms/*/package.xml
+    if test -L $f
+        cp --remove-destination (readlink -f $f) $f; and chmod 664 $f
+    end
+end
 # adb access to physical devices
 getent group adbusers >/dev/null; and not id -nG | string match -q adbusers; and sudo gpasswd -a $USER adbusers
 
-step "4/7 sdkmanager: licenses, build-tools 36.0.0 (AGP 9.4 default), system images for API 26 and 36"
+step "4/7 Android CLI: build-tools 36.0.0 (AGP 9.4 default) and system images for API 26 and 36"
 set -lx JAVA_HOME $JDK
 set -lx ANDROID_HOME $SDK
 set -lx ANDROID_SDK_ROOT $SDK
 test -w $SDK; or die "$SDK is not writable; re-run the script"
-yes | $SDKM --licenses >/dev/null; or die "license acceptance failed"
-$SDKM --install 'build-tools;36.0.0' 'system-images;android-26;google_apis;x86_64' 'system-images;android-36;google_apis;x86_64'; or die "sdkmanager install failed"
+# One package per call (the CLI stops at the first failure); `yes` answers the licence prompt.
+for pkg in build-tools/36.0.0 system-images/android-26/google_apis/x86_64 system-images/android-36/google_apis/x86_64
+    if test -d $SDK/$pkg
+        echo "$pkg already installed"
+    else
+        yes | $ACLI --sdk=$SDK sdk install $pkg; or die "installing $pkg failed"
+    end
+end
 
 step "5/7 AVDs: api26 and api36 (Pixel profile, stored in ~/.android/avd)"
 set -lx JAVA_HOME $JDK
@@ -81,6 +94,8 @@ echo "emulator:  "($SDK/emulator/emulator -version 2>/dev/null | head -1)
 echo "avds:      "($SDK/emulator/emulator -list-avds | string join ', ')
 echo "kvm:       "(test -r /dev/kvm -a -w /dev/kvm; and echo ok; or echo "NOT accessible")
 echo "installed SDK packages:"
-$SDKM --list_installed | sed -n '/^  /p'
+for d in $SDK/platforms/* $SDK/build-tools/* $SDK/system-images/*/*/*
+    test -d $d; and echo "  "(string replace "$SDK/" '' $d)
+end
 echo
 set_color -o green; echo "Done. Open a new terminal (or run 'exec fish') so JAVA_HOME/ANDROID_HOME/PATH are active."; set_color normal
