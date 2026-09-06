@@ -6,6 +6,7 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.subhaneetshrestha.atomic.apps.AppEntry
+import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.settings.HomeSettings
 
 /**
@@ -27,12 +28,9 @@ class HomeListView(
     fun render(
         rows: List<HomeRow>,
         settings: HomeSettings,
+        colors: ResolvedColors,
     ) {
         gravity = applier.horizontalGravity(settings.horizontalAlignment)
-        val horizontal = applier.dp(settings.horizontalPaddingDp)
-        val vertical = applier.dp(settings.verticalPaddingDp)
-        setPadding(horizontal, vertical, horizontal, vertical)
-
         while (childCount > rows.size) removeViewAt(childCount - 1)
         while (childCount < rows.size) addView(newRow())
 
@@ -42,7 +40,7 @@ class HomeListView(
             view.tag = row.entry
             view.text = row.label
             view.alpha = if (row.entry.isSuspended) SUSPENDED_ALPHA else 1f
-            applier.applyRow(view, settings)
+            applier.applyRow(view, settings, colors)
             (view.layoutParams as LayoutParams).topMargin = if (index == 0) 0 else gap
         }
         requestLayout()

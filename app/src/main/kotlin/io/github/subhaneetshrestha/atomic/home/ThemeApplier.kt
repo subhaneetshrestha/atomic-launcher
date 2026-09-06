@@ -6,7 +6,7 @@ import android.os.Build
 import android.util.TypedValue
 import android.view.Gravity
 import android.widget.TextView
-import io.github.subhaneetshrestha.atomic.R
+import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.settings.FontSpec
 import io.github.subhaneetshrestha.atomic.settings.HomeSettings
 import io.github.subhaneetshrestha.atomic.settings.HorizontalAlignment
@@ -14,9 +14,9 @@ import io.github.subhaneetshrestha.atomic.settings.VerticalPosition
 import kotlin.math.roundToInt
 
 /**
- * Applies settings to views. Sizes go through sp/dp and the display metrics and are never derived
- * from fontScale, so Android 14's non-linear font scaling stays correct. Later phases grow this
- * class into the full theme applier (legibility, badges, system bars, user fonts).
+ * Applies settings and resolved theme colours to views. Sizes go through sp/dp and the display
+ * metrics and are never derived from fontScale, so Android 14's non-linear font scaling stays
+ * correct. Later phases add legibility effects, badges, system bars and user fonts here.
  */
 class ThemeApplier(
     private val context: Context,
@@ -65,11 +65,31 @@ class ThemeApplier(
     fun applyRow(
         row: TextView,
         settings: HomeSettings,
+        colors: ResolvedColors,
     ) {
-        row.typeface = typeface(settings.font)
-        row.setTextSize(TypedValue.COMPLEX_UNIT_SP, settings.textSizeSp)
-        row.setTextColor(context.getColor(R.color.home_text))
-        row.minHeight = dp(settings.rowMinHeightDp)
-        row.gravity = Gravity.CENTER_VERTICAL or horizontalGravity(settings.horizontalAlignment)
+        applyText(
+            row,
+            settings.font,
+            settings.textSizeSp,
+            colors.text,
+            horizontalGravity(settings.horizontalAlignment),
+            settings.rowMinHeightDp,
+        )
+    }
+
+    /** Clock, date, battery: same family, own size and colour, same touch-target floor as rows. */
+    fun applyText(
+        view: TextView,
+        font: FontSpec,
+        sizeSp: Float,
+        color: Int,
+        horizontalGravity: Int,
+        minHeightDp: Int = 48,
+    ) {
+        view.typeface = typeface(font)
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+        view.setTextColor(color)
+        view.minHeight = dp(minHeightDp)
+        view.gravity = Gravity.CENTER_VERTICAL or horizontalGravity
     }
 }

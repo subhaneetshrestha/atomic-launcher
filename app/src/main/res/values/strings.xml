@@ -3,4 +3,5 @@
     <string name="app_name">atomic</string>
     <string name="default_home_banner">Set atomic as your home app</string>
     <string name="launch_failed">Could not open %1$s</string>
+    <string name="settings_title">Settings</string>
 </resources>

@@ -16,10 +16,10 @@ class HomeRootView(
     context: Context,
 ) : FrameLayout(context) {
     private val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    private val listHost = FrameLayout(context)
+    private val blockHost = FrameLayout(context)
 
     init {
-        content.addView(listHost, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+        content.addView(blockHost, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
         addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
@@ -28,23 +28,24 @@ class HomeRootView(
         }
     }
 
-    fun setList(
-        list: View,
+    /** The block of info lines plus app list, placed by the theme's vertical alignment. */
+    fun setBlock(
+        block: View,
         verticalGravity: Int,
     ) {
-        listHost.removeAllViews()
-        listHost.addView(list, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, verticalGravity))
+        blockHost.removeAllViews()
+        blockHost.addView(block, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, verticalGravity))
     }
 
-    fun positionList(verticalGravity: Int) {
-        val params = listHost.getChildAt(0)?.layoutParams as? LayoutParams ?: return
+    fun positionBlock(verticalGravity: Int) {
+        val params = blockHost.getChildAt(0)?.layoutParams as? LayoutParams ?: return
         if (params.gravity != verticalGravity) {
             params.gravity = verticalGravity
-            listHost.requestLayout()
+            blockHost.requestLayout()
         }
     }
 
-    /** A full-width row below the list, e.g. the default-home banner. */
+    /** A full-width row below the block, e.g. the default-home banner. */
     fun addFooter(view: View) {
         content.addView(view, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }

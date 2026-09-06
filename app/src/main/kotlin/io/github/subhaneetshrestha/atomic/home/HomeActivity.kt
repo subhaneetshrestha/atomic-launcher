@@ -2,44 +2,50 @@ package io.github.subhaneetshrestha.atomic.home
 
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
+import android.widget.LinearLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import io.github.subhaneetshrestha.atomic.AtomicApp
+import io.github.subhaneetshrestha.atomic.ThemedActivity
 import io.github.subhaneetshrestha.atomic.apps.AppLauncher
 import io.github.subhaneetshrestha.atomic.apps.AppRepository
-import io.github.subhaneetshrestha.atomic.settings.SettingsSource
+import io.github.subhaneetshrestha.atomic.core.theme.InfoPosition
+import io.github.subhaneetshrestha.atomic.core.theme.Settings
+import io.github.subhaneetshrestha.atomic.home.info.InfoLinesView
+import io.github.subhaneetshrestha.atomic.settings.SettingsActivity
+import io.github.subhaneetshrestha.atomic.settings.SettingsRepository
 import io.github.subhaneetshrestha.atomic.util.Logs
 
 /**
- * The single activity. It is the HOME activity, so it must never finish on Back, must survive
- * being recreated with no saved state (stateNotNeeded), and receives the Home key through
- * onNewIntent while an instance exists.
+ * The single home activity. It must never finish on Back, must survive being recreated with no
+ * saved state (stateNotNeeded), and receives the Home key through onNewIntent while it exists.
  */
-class HomeActivity : ComponentActivity() {
-    private val app: AtomicApp get() = application as AtomicApp
-    private val repository: AppRepository get() = app.appRepository
-    private val settings: SettingsSource get() = app.settingsSource
+class HomeActivity : ThemedActivity() {
+    private val repository: AppRepository get() = atomicApp.appRepository
+    private val settings: SettingsRepository get() = atomicApp.settingsRepository
 
     private lateinit var applier: ThemeApplier
     private lateinit var root: HomeRootView
+    private lateinit var block: LinearLayout
     private lateinit var list: HomeListView
+    private lateinit var infoLines: InfoLinesView
     private lateinit var banner: DefaultHomeBanner
     private lateinit var launcher: AppLauncher
     private lateinit var defaultHome: DefaultHomePrompt
+    private var infoPosition: InfoPosition? = null
 
     private val roleRequest =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            refreshBanner()
-        }
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshBanner() }
     private val snapshotListener = AppRepository.Listener { render() }
-    private val settingsListener = SettingsSource.Listener { render() }
+    private val documentListener: (Settings, Settings) -> Unit = { old, new ->
+        if (old.appearance.nightMode != new.appearance.nightMode) recreate() else render()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,18 +70,19 @@ class HomeActivity : ComponentActivity() {
         launcher = AppLauncher(this, repository)
         defaultHome = DefaultHomePrompt(this)
 
-        list =
-            HomeListView(this, applier).apply {
-                onRowClick = { entry, view -> launcher.launch(entry, view) }
-            }
-        banner =
-            DefaultHomeBanner(this, applier).apply {
-                setOnClickListener { defaultHome.request(roleRequest) }
-            }
+        list = HomeListView(this, applier).apply { onRowClick = { entry, view -> launcher.launch(entry, view) } }
+        infoLines = InfoLinesView(this, applier)
+        block = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        banner = DefaultHomeBanner(this, applier).apply { setOnClickListener { defaultHome.request(roleRequest) } }
         root =
             HomeRootView(this).apply {
-                setList(list, applier.verticalGravity(settings.current.verticalPosition))
+                setBlock(block, applier.verticalGravity(settings.current.verticalPosition))
                 addFooter(banner)
+                // Phase 2 entry point to settings; the gesture engine takes over in Phase 3.
+                setOnLongClickListener {
+                    openSettings()
+                    true
+                }
             }
         setContentView(root)
 
@@ -95,7 +102,8 @@ class HomeActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         repository.addListener(snapshotListener)
-        settings.addListener(settingsListener)
+        settings.addDocumentListener(documentListener)
+        infoLines.onStart()
         render()
     }
 
@@ -107,7 +115,9 @@ class HomeActivity : ComponentActivity() {
 
     override fun onStop() {
         repository.removeListener(snapshotListener)
-        settings.removeListener(settingsListener)
+        settings.removeDocumentListener(documentListener)
+        infoLines.onStop()
+        settings.flush()
         super.onStop()
     }
 
@@ -123,9 +133,35 @@ class HomeActivity : ComponentActivity() {
     private fun resetToHome() = Unit
 
     private fun render() {
-        val current = settings.current
-        list.render(HomeListModel.build(repository.current.entries, current), current)
-        root.positionList(applier.verticalGravity(current.verticalPosition))
+        val view = settings.current
+        val document = settings.settings
+        val colors = atomicApp.resolvedColors(this)
+        window.setBackgroundDrawable(ColorDrawable(colors.background))
+        arrangeBlock(document.homeInfo.position)
+        val h = applier.dp(view.horizontalPaddingDp)
+        val v = applier.dp(view.verticalPaddingDp)
+        block.setPadding(h, v, h, v)
+        list.render(HomeListModel.build(repository.current.entries, view), view, colors)
+        infoLines.bind(document.homeInfo, document.theme, view, colors)
+        banner.applyColors(colors)
+        root.positionBlock(applier.verticalGravity(view.verticalPosition))
+    }
+
+    private fun arrangeBlock(position: InfoPosition) {
+        if (infoPosition == position) return
+        infoPosition = position
+        block.removeAllViews()
+        val params =
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        val ordered = if (position == InfoPosition.ABOVE) listOf(infoLines, list) else listOf(list, infoLines)
+        for (child in ordered) block.addView(child, LinearLayout.LayoutParams(params))
+    }
+
+    private fun openSettings() {
+        startActivity(Intent(this, SettingsActivity::class.java))
     }
 
     private fun refreshBanner() {

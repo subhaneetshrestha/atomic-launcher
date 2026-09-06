@@ -16,6 +16,11 @@ object Threads {
 
     val apps: Handler = Handler(appsThread.looper)
 
+    private val ioThread = HandlerThread("atomic-io").apply { start() }
+
+    /** Small file writes (settings, crash report copies); never rendering. */
+    val io: Handler = Handler(ioThread.looper)
+
     val isMainThread: Boolean
         get() = Looper.myLooper() == Looper.getMainLooper()
 }
