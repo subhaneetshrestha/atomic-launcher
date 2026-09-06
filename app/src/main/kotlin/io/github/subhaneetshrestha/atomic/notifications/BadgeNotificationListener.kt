@@ -61,7 +61,13 @@ class BadgeNotificationListener : NotificationListenerService() {
     override fun onNotificationRankingUpdate(rankingMap: RankingMap?) {
         val map = rankingMap ?: return
         val ranking = Ranking()
-        badges?.hub?.reranked { key -> if (map.getRanking(key, ranking)) ranking.canShowBadge() else null }
+        badges?.hub?.reranked { key ->
+            if (map.getRanking(key, ranking)) {
+                Ranked(canShowBadge = ranking.canShowBadge(), isSuspended = suspended(ranking))
+            } else {
+                null
+            }
+        }
     }
 
     private fun facts(
@@ -82,11 +88,14 @@ class BadgeNotificationListener : NotificationListenerService() {
             isOngoing = sbn.isOngoing,
             isForegroundService = notification.flags and Notification.FLAG_FOREGROUND_SERVICE != 0,
             category = notification.category,
-            isSuspended = if (Build.VERSION.SDK_INT >= SUSPENDED_SDK) ranking?.isSuspended == true else false,
+            isSuspended = ranking != null && suspended(ranking),
             hasTitleOrText = hasTitleOrText(notification),
             number = notification.number,
         )
     }
+
+    /** Ranking.isSuspended arrived in Android 9; before it, an app is never reported as paused. */
+    private fun suspended(ranking: Ranking): Boolean = Build.VERSION.SDK_INT >= SUSPENDED_SDK && ranking.isSuspended
 
     /**
      * Whether there is anything to read, without reading it. The extras come from another app's

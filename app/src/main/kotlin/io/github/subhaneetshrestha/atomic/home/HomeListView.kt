@@ -54,9 +54,15 @@ class HomeListView(
         requestLayout()
     }
 
+    /**
+     * Rows are as wide as their name, not as wide as the screen: a badge is a compound drawable,
+     * and a TextView puts those at its own edges rather than beside the text, so a full-width row
+     * would leave the count stranded at the edge of the screen. The list's gravity then does the
+     * alignment, and everything the name does not cover is empty space for gestures.
+     */
     private fun newRow(): TextView =
         TextView(context).apply {
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
             setSingleLine(true)
             ellipsize = TextUtils.TruncateAt.END
             isClickable = true

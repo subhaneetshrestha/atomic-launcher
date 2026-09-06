@@ -81,8 +81,20 @@ look_for() {
 
 api=$(sh getprop ro.build.version.sdk)
 read -r width height < <(sh wm size | awk -F'[ x]' '/Physical/{print $3, $4}')
-# Long-press on empty space, well above the list, is the way into settings.
-open_settings() { sh input swipe $((width / 2)) $((height / 10)) $((width / 2)) $((height / 10)) 1500 >/dev/null; wait_s 2; }
+# Long-press on empty space is the way into settings. Which part of the screen is empty depends
+# on the theme (a top-aligned one puts the full-width clock where the first guess lands), so try
+# a few heights and check we arrived.
+open_settings() {
+  local y
+  for y in $((height / 10)) $((height * 17 / 20)) $((height * 2 / 5)) $((height * 3 / 5)); do
+    sh input swipe $((width / 2)) "$y" $((width / 2)) "$y" 1500 >/dev/null
+    wait_s 2
+    has_text "Home apps" "$(dump)" && return 0
+    sh input keyevent KEYCODE_BACK >/dev/null
+    wait_s 1
+  done
+  return 1
+}
 echo "== $SERIAL: API $api, ${width}x${height} =="
 
 $ADB install -r -t "$APK" >/dev/null 2>&1 && ok "install $APK" || ko "install $APK"
@@ -133,7 +145,7 @@ sh dumpsys package "$PKG" | grep -q 'BadgeNotificationListener' && ok "the syste
   || ko "the system knows the listener service"
 
 # 2. Badges are off out of the box, and say what they need.
-open_settings
+open_settings || ko "long press on empty space opens settings"
 tap_text "Notification badges" || ko "Notification badges row in settings"
 ui=$(dump)
 has_text "Show notification badges" "$ui" && ok "badge settings screen" || ko "badge settings screen"
@@ -192,18 +204,28 @@ else
 fi
 badges_enabled && ko "badges stay off until access is real" || ok "badges stay off until access is real"
 
-# 7. With access granted, the switch turns badges on.
+# 7. The grant arrives. The user has already said what they wanted by tapping Continue, so the
+# launcher honours it on the way back rather than making them find the switch again.
 grant_access
 go_home
-open_settings
+badges_enabled && ok "a grant the user went to Settings for turns badges on by itself" \
+  || ko "a grant the user went to Settings for turns badges on by itself"
+open_settings || ko "long press on empty space opens settings"
 tap_text "Notification badges" || ko "Notification badges row (after granting)"
 ui=$(dump)
 grep -qi 'Notification access is on' <<<"$ui" && ok "the screen sees the grant" || ko "the screen sees the grant"
-tap_text "Show notification badges" || ko "tap the badge switch (granted)"
-badges_enabled && ok "badges are on" || ko "badges are on"
+# And the switch is a switch: off, then on again with no disclosure, because access is already there.
+tap_text "Show notification badges" || ko "turn badges off"
+badges_enabled && ko "the switch turns badges off" || ok "the switch turns badges off"
+tap_text "Show notification badges" || ko "turn badges on again"
+badges_enabled && ok "and on again, with no second disclosure" || ko "and on again, with no second disclosure"
+has_text "Continue to Settings" "$(dump)" && ko "no disclosure when access is already granted" \
+  || ok "no disclosure when access is already granted"
 go_home
 
 # 8. Counting: two conversations, two notifications, one badge of 2.
+row_width() { local b; b=$(bounds_of "$1" "$(dump)"); [ -z "$b" ] && { echo 0; return; }; read -r x1 _ x2 _ <<<"$b"; echo $(( 10#$x2 - 10#$x1 )); }
+bare_row=$(row_width Messages)
 $ADB emu sms send 5551234567 "first message" >/dev/null 2>&1
 wait_s 1
 look_for Messages 1 && ok "one notification, one badge (after $looks look(s) of about a second)" \
@@ -212,6 +234,23 @@ $ADB emu sms send 5559876543 "second message" >/dev/null 2>&1
 look_for Messages 2 && ok "a second conversation counts too" || ko "a second conversation counts too (read: '${badge:-none}')"
 desc=$(row_desc Messages "$(dump)")
 grep -qi 'Messages, 2 notifications' <<<"$desc" && ok "the count is spoken as well as drawn" || ko "the count is spoken as well as drawn (desc: '$desc')"
+# The badge lives inside the row, beside the name: the row is wider with a badge than without
+# one, is nothing like the width of the screen, and is still centred.
+b=$(bounds_of "Messages" "$(dump)")
+if [ -n "$b" ]; then
+  read -r x1 _ x2 _ <<<"$b"
+  roww=$(( 10#$x2 - 10#$x1 ))
+  off=$(( (10#$x1 + 10#$x2) / 2 - width / 2 ))
+  [ "$bare_row" -gt 0 ] && [ "$roww" -gt $((bare_row + 20)) ] \
+    && ok "the badge is inside the row, beside the name (row ${bare_row}px bare, ${roww}px badged)" \
+    || ko "the badge is inside the row, beside the name (row ${bare_row}px bare, ${roww}px badged)"
+  [ "$roww" -lt $((width * 7 / 10)) ] && ok "the row is as wide as its name, not the screen ($roww of $width)" \
+    || ko "the row is as wide as its name, not the screen ($roww of $width)"
+  [ "${off#-}" -lt $((width / 20)) ] && ok "and it is still centred (off by ${off}px)" \
+    || ko "and it is still centred (off by ${off}px)"
+else
+  ko "the Messages row is on screen"
+fi
 
 # 9. A channel that forbids badges never gets one: the clock's own timer channel.
 sh am start -a android.intent.action.SET_TIMER --ei android.intent.extra.alarm.LENGTH 600 --ez android.intent.extra.alarm.SKIP_UI true >/dev/null
@@ -223,7 +262,7 @@ got=$(badge_of Clock)
 [ -z "$got" ] && ok "a channel that forbids badges gets none" || ko "a channel that forbids badges gets none (read: '$got')"
 
 # 10. Per-app: the count is kept, the badge is not shown.
-open_settings
+open_settings || ko "long press on empty space opens settings"
 tap_text "Notification badges" || ko "Notification badges row (per-app)"
 tap_text "Apps without badges" || ko "Apps without badges row"
 scroll_to_tap "Messages" || ko "Messages row in the per-app list"
@@ -231,7 +270,7 @@ wait_s 1
 grep -q '"pkg": "com.google.android.apps.messaging"' <<<"$(settings_json)" && ok "the app is written down as silenced" || ko "the app is written down as silenced"
 go_home
 look_for Messages "" && ok "a silenced app shows no badge" || ko "a silenced app shows no badge (read: '$badge')"
-open_settings
+open_settings || ko "long press on empty space opens settings"
 tap_text "Notification badges" >/dev/null; tap_text "Apps without badges" >/dev/null; scroll_to_tap "Messages" >/dev/null
 go_home
 look_for Messages 2 && ok "unsilencing brings the badge back at once (after $looks look(s))" \
@@ -275,11 +314,18 @@ ui=$(dump); has_text "Messages" "$ui" && ok "rows still readable at 200%" || ko 
 sh settings put system font_scale 1.0 >/dev/null; wait_s 2
 
 # 16. Another theme: rows start at the left and the badge is a plain number, not a circle.
-open_settings
+open_settings || ko "long press on empty space opens settings"
 tap_text "Theme" || ko "Theme row"
 scroll_to_tap "Terminal" || ko "Terminal theme row"
 wait_s 2
 go_home
+restore_ink() {
+  open_settings || return 1
+  tap_text "Theme" || return 1
+  scroll_to_tap "Ink" || return 1
+  wait_s 2
+  go_home
+}
 look_for Messages 1 && ok "a start-aligned theme with a plain-number badge still counts" \
   || ko "a start-aligned theme with a plain-number badge still counts (read: '${badge:-none}')"
 ui=$(dump)
@@ -292,7 +338,38 @@ else
   ko "the Messages row is on screen under the terminal theme"
 fi
 
-# 17. Nothing crashed along the way.
+restore_ink && ok "the theme goes back to ink" || ko "the theme goes back to ink"
+
+# 17. A paused app has nothing to show. Pausing hides notifications rather than removing them,
+# so the only word the launcher gets is a ranking update. (Android 9 and later.)
+if [ "$api" -ge 28 ]; then
+  sh pm suspend "$MESSAGES" >/dev/null
+  look_for Messages "" && ok "pausing an app takes its badge away" || ko "pausing an app takes its badge away (read: '$badge')"
+  sh pm unsuspend "$MESSAGES" >/dev/null
+  look_for Messages 1 && ok "unpausing brings it back" || ko "unpausing brings it back (read: '${badge:-none}')"
+else
+  info "no pm suspend on API $api; the pause rule is covered by BadgeHubTest"
+fi
+
+# 18. The grant is honoured even when the screen that asked for it is gone. Leaving Settings with
+# the Home key finishes it, so the launcher's own onResume is the only thing left to notice.
+revoke_access
+open_settings || ko "long press on empty space opens settings"
+tap_text "Notification badges" || ko "Notification badges row (grant-outlives-screen)"
+tap_text "Show notification badges" || ko "turn badges off again"
+badges_enabled && ko "badges off before the second grant" || ok "badges off before the second grant"
+tap_text "Show notification badges" || ko "tap the switch with access revoked"
+tap_text "Continue to Settings" || ko "Continue to Settings (second time)"
+wait_s 2
+grant_access
+go_home
+wait_s 2
+badges_enabled && ok "the grant is honoured after the asking screen is gone" \
+  || ko "the grant is honoured after the asking screen is gone"
+look_for Messages 1 && ok "and the badge appears without another trip through settings" \
+  || ko "and the badge appears without another trip through settings (read: '${badge:-none}')"
+
+# 19. Nothing crashed along the way.
 sh pm clear "$MESSAGES" >/dev/null
 sh pm clear "$CLOCK" >/dev/null
 crashes_after=$(crash_count)

@@ -12,7 +12,7 @@ not receiving notifications at all.
 |---|---|---|
 | `BadgeCounter` | 7 | the group summary is skipped in favour of the notifications under it; a channel the user silenced does not count; a suspended app, and a notification with neither title nor text, do not count; an ongoing notification, a foreground service and a playing track are left out unless the user asks for them; an ongoing notification on the channel apps had before channels existed never counts; a count is the sum of what the apps say, at least one each, capped at 999; the same app in another profile counts separately |
 | `BadgeStore` | 6 | a count can be read the instant it arrives, while the screen is told one frame later, so five arrivals cost one redraw; nothing is redrawn when nothing changed; losing access clears everything; an app the user silenced reads nought while its count is kept; a listener can be removed |
-| `BadgeHub` | 6 | everything already showing becomes counts the moment access is granted; one arrival changes one app; dismissing the last notification takes the badge away; turning on ongoing notifications recounts what is already there, with no new notification needed; silencing a channel stops its count without dismissing anything; losing access forgets the notifications too |
+| `BadgeHub` | 7 | everything already showing becomes counts the moment access is granted; one arrival changes one app; dismissing the last notification takes the badge away; turning on ongoing notifications recounts what is already there, with no new notification needed; silencing a channel stops its count without dismissing anything; pausing an app takes its badge away and unpausing brings it back, both from a ranking update alone; losing access forgets the notifications too |
 | `BadgeGeometry` | 5 | a single digit sits in a circle sized from the row's own text size; three digits stretch it into a pill without changing the row's height; a dot says only that something is waiting; a plain number is only the digits; a badge never grows past one and a fifth of the name it sits beside |
 | `NotificationAccess` | 4 | on Android 8 the grant is read from the list the system keeps, in either spelling of the component and with spaces around it; an app whose name merely contains ours is not us; Android 11 and later open the page for this one app, older versions the list of every listener; a small phone on an old Android cannot do this at all |
 | `InstallSource` | 4 | nothing is restricted before Android 13; an app from the Play Store is never restricted; an app installed from a file is; anything else is a maybe, and is worded as one |
@@ -20,7 +20,7 @@ not receiving notifications at all.
 | `NotificationConfig` | 3 | badges and ongoing notifications are both off out of the box; an exception is stored by package, deduplicated and checked; a badge is shown only while the feature is on and the app is not excepted |
 | `SettingsEdits` | 3 | silencing one app leaves the others alone and is idempotent; the moment of consent is written down once and never rewritten; a consent written by a newer version is kept as it is |
 
-42 tests added, 156 across the project, all green. ktlint and Android lint clean. Release APK
+43 tests added, 157 across the project, all green. ktlint and Android lint clean. Release APK
 293,226 bytes unsigned against the 2.5 MiB budget; the release classpath is still free of Google
 Play services.
 
@@ -47,10 +47,13 @@ a Paint either.
 | Coming back without the grant offers the restricted-settings help where Android guards it | n/a | pass |
 | The help names the switch to look for ("Allow restricted settings") | n/a | pass |
 | Badges stay off until access is real | pass | pass |
-| With access granted, the screen sees it and the switch turns badges on | pass | pass |
+| A grant the user went to Settings for turns badges on by itself, and the screen sees it | pass | pass |
+| The switch then turns badges off, and on again with no second disclosure | pass | pass |
+| The grant is honoured even after the screen that asked for it is gone (left by the Home key) | pass | pass |
 | One notification, one badge, at the first look (about a second) | pass | pass |
 | A second conversation counts too | pass | pass |
 | The count is spoken as well as drawn | pass | pass |
+| The badge is inside the row beside the name: wider with a badge (347 px) than without (289 px), nothing like the width of the screen, still centred | pass | pass |
 | A channel that forbids badges gets none | pass (nothing posted) | pass (2 posted) |
 | Silencing one app is written down and its badge goes | pass | pass |
 | Unsilencing brings the badge back at the first look | pass | pass |
@@ -60,9 +63,12 @@ a Paint either.
 | Dismissing the last notification removes the badge | pass | pass |
 | The badge survives a 200 % font scale, and rows stay readable | pass | pass |
 | A start-aligned theme with a plain-number badge still counts, and the row is still at the start | pass | pass |
+| Pausing an app takes its badge away; unpausing brings it back | n/a | pass |
 | No crashes anywhere in the run | pass | pass |
 
-39 of 39 on API 26 and 40 of 40 on API 36 (API 36 has the extra restricted-settings row).
+49 of 49 on API 26 and 52 of 52 on API 36. API 36 has three checks API 26 cannot run: the two
+restricted-settings rows, which Android only guards from 13, and the pause rule, which needs both
+`Ranking.isSuspended` (Android 9) and `pm suspend`.
 
 Phase 1 to 4 harnesses re-run on the same build, with no failures anywhere:
 
@@ -89,6 +95,9 @@ levels.
   the switch actually being inert, need an APK installed from a file manager on a real phone.
 - **The clock timer on API 26.** `SET_TIMER` with `SKIP_UI` posted nothing there, so the
   forbidden-channel row passed with nothing on screen. It is a real check on API 36.
+- **A grant surviving process death.** The pending hand-off to Settings is process state, so a
+  launcher killed while the user is still in Settings forgets that they went there. Coming back and
+  tapping the switch then turns badges on straight away, since access is already granted.
 
 ## What we learned
 
@@ -112,3 +121,31 @@ levels.
 - **A drawn badge is invisible to everything that reads the screen.** Giving the row a content
   description fixed that for screen readers and, as a side effect, made every count in this
   harness readable.
+
+## What a review of this phase found
+
+Four readers went over the phase from different angles and every finding was then handed to a
+skeptic told to refute it. Three survived, and all three are fixed here. Four were refuted, two of
+them convincingly enough to be worth recording: a claimed integer overflow in the counter needs an
+app to post two notifications with `number` within 999 of `Integer.MAX_VALUE`, and the claim that
+notifications keep arriving while the listener asks to be unbound is wrong about the framework,
+whose base class stops dispatching to the subclass inside `requestUnbind()` itself.
+
+1. **The badge was drawn against the edge of the screen** (high). A `TextView` puts a start or end
+   compound drawable at its own padding edge and never consults the text's gravity, so a full-width
+   row with the shipped centred default left about 300 pixels between the name and its count. Rows
+   are now as wide as their name, which is [ADR 0003](../decisions/0003-home-rows-are-as-wide-as-their-name.md).
+   The harness had not caught it because it reads counts from the content description and never
+   looked at where the badge landed; it now measures the row.
+2. **A paused app kept its badge** (medium). Pausing an app (a focus mode, an app timer, a managed
+   policy) hides its notifications rather than removing them, and the only word a listener gets is a
+   ranking update. `BadgeHub.reranked` refreshed `canShowBadge` from that update but not
+   `isSuspended`, so the rule in `BadgeCounter` silently stopped applying after the first read and
+   the dimmed row kept announcing a count for notifications the shade was hiding. A ranking update
+   now carries both flags. Verified on API 36 with `pm suspend`.
+3. **A grant could be observed and then ignored** (medium). The one-shot that turned badges on after
+   the user came back from Settings was a field on the disclosure screen, and leaving Settings with
+   the Home key finishes that screen. The user would grant access and find badges still off. The
+   pending hand-off now lives on the process-wide controller and is spent by whichever screen
+   notices the grant first, which also means the launcher honours it without the settings screen
+   existing at all. Two harness checks cover it.

@@ -965,6 +965,9 @@ class SettingsActivity : ThemedActivity() {
                 try {
                     startActivity(intent)
                     handedOver = true
+                    // Whoever notices the grant first acts on it: this screen may be gone by the
+                    // time the user comes back, and then the home screen's onResume is all there is.
+                    if (spec.kind == ConsentKind.NOTIFICATION_ACCESS) atomicApp.badges.awaitingGrant = true
                     return
                 } catch (e: ActivityNotFoundException) {
                     Logs.w(TAG, "no activity for ${intent.action}", e)
@@ -973,13 +976,15 @@ class SettingsActivity : ThemedActivity() {
             toast(getString(R.string.grant_no_settings))
         }
 
-        /** Called when Settings hands the user back: check rather than assume. */
+        /**
+         * Called when Settings hands the user back: check rather than assume. Turning badges on
+         * is the controller's job (it has already run in onResume, and it runs even when this
+         * screen did not survive); this only says what happened and gets out of the way.
+         */
         fun onReturn() {
             if (!handedOver) return
             handedOver = false
             if (spec.isGranted(this@SettingsActivity)) {
-                // They came here to turn badges on, so turn them on.
-                settings.update { it.copy(notifications = it.notifications.copy(enabled = true)) }
                 toast(getString(R.string.grant_granted))
                 popTo(ScreenId.BADGES)
                 return

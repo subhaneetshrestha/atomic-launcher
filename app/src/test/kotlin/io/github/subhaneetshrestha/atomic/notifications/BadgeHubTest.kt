@@ -94,10 +94,29 @@ class BadgeHubTest {
         hub.replaceAll(listOf(note("a"), note("b")))
         clock.run()
 
-        hub.reranked { key -> if (key == "a") false else true }
+        hub.reranked { key -> Ranked(canShowBadge = key != "a", isSuspended = false) }
         clock.run()
 
         assertEquals(1, store.countFor("com.chat", 0), "only the silenced one stopped counting")
+    }
+
+    @Test
+    fun `pausing an app takes its badge away, and unpausing brings it back`() {
+        hub.replaceAll(listOf(note("a"), note("b")))
+        clock.run()
+        assertEquals(2, store.countFor("com.chat", 0))
+
+        // A paused app's notifications are hidden rather than removed: the only word we get is a
+        // ranking update, and it never arrives again while the app stays paused.
+        hub.reranked { Ranked(canShowBadge = true, isSuspended = true) }
+        clock.run()
+
+        assertEquals(0, store.countFor("com.chat", 0), "a paused app has nothing to show")
+
+        hub.reranked { Ranked(canShowBadge = true, isSuspended = false) }
+        clock.run()
+
+        assertEquals(2, store.countFor("com.chat", 0), "and the count is still there when it comes back")
     }
 
     @Test

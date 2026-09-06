@@ -32,6 +32,14 @@ class BadgeController(
     /** Whether the user has asked for badges at all. Access is a separate question. */
     val wanted: Boolean get() = settings.settings.notifications.enabled
 
+    /**
+     * Set when the user is handed to Settings to grant notification access, and spent the first
+     * time we see that they did. It lives here rather than on the screen that set it because that
+     * screen may be gone by the time they come back: leaving Settings by the Home key finishes
+     * it, and the launcher's own onResume is then the only thing left to notice the grant.
+     */
+    var awaitingGrant: Boolean = false
+
     fun start() {
         apply(settings.settings.notifications)
         settings.addDocumentListener { old, new ->
@@ -50,8 +58,14 @@ class BadgeController(
         if (listener.get() === service) listener.clear()
     }
 
-    /** Called after the user grants or revokes access in Settings. */
+    /** Called from either activity's onResume: the user may have been to Settings meanwhile. */
     fun onAccessChanged(granted: Boolean) {
+        if (granted && awaitingGrant) {
+            // They went to Settings to turn badges on, and they did. Honour that once, and never
+            // against a later decision to turn badges off.
+            awaitingGrant = false
+            if (!wanted) settings.update { it.copy(notifications = it.notifications.copy(enabled = true)) }
+        }
         if (granted && wanted) {
             NotificationAccess.rebind(context)
         } else if (!granted) {

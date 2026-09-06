@@ -1,5 +1,11 @@
 package io.github.subhaneetshrestha.atomic.notifications
 
+/** What a ranking update says about a notification the hub is already holding. */
+data class Ranked(
+    val canShowBadge: Boolean,
+    val isSuspended: Boolean,
+)
+
 /**
  * Holds what is currently showing in the shade, as facts rather than notifications, and keeps
  * [BadgeStore] in step with it. Separate from the listener service for two reasons: a setting can
@@ -41,16 +47,24 @@ class BadgeHub(
     }
 
     /**
-     * The ranking changed: whether a notification may show a badge can differ now, for instance
-     * because the user has just silenced its channel. [canShowBadge] returns null for a key the
-     * ranking no longer mentions, which is left as it was.
+     * The ranking changed. Two things about a notification can differ now: whether it may show a
+     * badge, because the user has silenced its channel, and whether its app is paused, because a
+     * focus mode or an app timer has suspended it. Pausing hides notifications rather than
+     * removing them, so a ranking update is the only word we get, and it does not come again
+     * while the app stays paused. [rank] returns null for a key the ranking no longer mentions,
+     * which is left as it was.
      */
-    fun reranked(canShowBadge: (String) -> Boolean?) {
+    fun reranked(rank: (String) -> Ranked?) {
         var changed = false
         for ((key, notification) in facts) {
-            val allowed = canShowBadge(key) ?: continue
-            if (allowed == notification.canShowBadge) continue
-            facts[key] = notification.copy(canShowBadge = allowed)
+            val ranked = rank(key) ?: continue
+            if (ranked.canShowBadge == notification.canShowBadge &&
+                ranked.isSuspended == notification.isSuspended
+            ) {
+                continue
+            }
+            facts[key] =
+                notification.copy(canShowBadge = ranked.canShowBadge, isSuspended = ranked.isSuspended)
             changed = true
         }
         if (changed) publishAll()

@@ -70,6 +70,8 @@ class ThemeApplier(
         settings: HomeSettings,
         colors: ResolvedColors,
     ) {
+        // Rows are only as wide as their name, so a two-letter one still needs a target to hit.
+        row.minWidth = dp(settings.rowMinHeightDp)
         applyText(
             row,
             settings.font,
