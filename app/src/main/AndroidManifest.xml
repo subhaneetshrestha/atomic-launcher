@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        Package visibility (target 30+): LauncherApps filters by what the caller may see.
+        One MAIN/LAUNCHER query exposes every launchable activity; QUERY_ALL_PACKAGES is
+        deliberately not declared and must never be added (CI gate).
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".AtomicApp"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:enableOnBackInvokedCallback="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Atomic"
+        tools:targetApi="tiramisu">
+
+        <!--
+            Home activity attributes follow AOSP Launcher3 plus Olauncher's excludeFromRecents:
+            singleTask + taskAffinity="" keep one instance that receives the Home key via
+            onNewIntent(); stateNotNeeded makes recreation cheap (all state is persisted);
+            resumeWhilePausing lets Home resume before the previous app finishes pausing;
+            the configChanges list relayouts on rotation instead of recreating, while locale,
+            font scale and night mode still recreate so labels, sizes and colors are re-read.
+        -->
+        <activity
+            android:name=".home.HomeActivity"
+            android:clearTaskOnLaunch="true"
+            android:configChanges="keyboard|keyboardHidden|mcc|mnc|navigation|orientation|screenSize|screenLayout|smallestScreenSize"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:resumeWhilePausing="true"
+            android:stateNotNeeded="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

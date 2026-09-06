@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+        DeviceDefault keeps platform dialogs and widgets consistent with the OEM/Material You
+        look without AppCompat. windowBackground must match the home background: the home
+        activity never gets a system splash window, so a mismatch flashes on cold start.
+    -->
+    <style name="Theme.Atomic" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/home_background</item>
+        <item name="android:windowShowWallpaper">false</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+    </style>
+</resources>

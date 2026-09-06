@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three text lines: the whole product in one glyph. Drawn inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFF2F2F2"
+        android:pathData="M34,39 h40 a3,3 0 0 1 0,6 h-40 a3,3 0 0 1 0,-6 z" />
+    <path
+        android:fillColor="#FFF2F2F2"
+        android:pathData="M34,51 h28 a3,3 0 0 1 0,6 h-28 a3,3 0 0 1 0,-6 z" />
+    <path
+        android:fillColor="#FFF2F2F2"
+        android:pathData="M34,63 h34 a3,3 0 0 1 0,6 h-34 a3,3 0 0 1 0,-6 z" />
+</vector>
