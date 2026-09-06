@@ -18,14 +18,24 @@ info() { echo "INFO  $1"; }
 sh() { $ADB shell "$@" 2>/dev/null | tr -d '\r'; }
 wait_s() { $ADB shell sleep "$1" >/dev/null 2>&1; }
 dump() { $ADB shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; $ADB shell cat /sdcard/ui.xml 2>/dev/null | tr -d '\r'; }
-has_text() { grep -q "text=\"$1\"" <<<"$2"; }
-bounds_of() { grep -o "text=\"$1\"[^>]*bounds=\"\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]\"" <<<"$2" | head -1 | sed -E 's/.*\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\].*/\1 \2 \3 \4/'; }
-tap_text() { # tap the centre of the first node with this exact text; returns 1 when absent
+# Text matching is case-insensitive (older platform themes upper-case button labels) and a row
+# whose text continues with a detail line ("Label&#10;detail") counts as "Label".
+has_text() { grep -qiE "text=\"$1(\"|&#10;)" <<<"$2"; }
+node_with_text() { grep -oiE "<node[^>]*text=\"$1(\"|&#10;)[^>]*>" <<<"$2" | head -1; }
+bounds_of() { node_with_text "$1" "$2" | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1 | sed -E 's/.*\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\].*/\1 \2 \3 \4/'; }
+centre() { read -r x1 y1 x2 y2 <<<"$1"; echo "$(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 ))"; }
+tap_text() { # tap the centre of the first node with this text; returns 1 when absent
   local b; b=$(bounds_of "$1" "$(dump)"); [ -z "$b" ] && return 1
-  read -r x1 y1 x2 y2 <<<"$b"; sh input tap $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )) >/dev/null; wait_s 2
+  sh input tap $(centre "$b") >/dev/null; wait_s 2
 }
+long_press_text() { # hold on the node with this text; returns 1 when absent
+  local b c; b=$(bounds_of "$1" "$(dump)"); [ -z "$b" ] && return 1
+  c=$(centre "$b"); sh input swipe $c $c 1200 >/dev/null; wait_s 2
+}
+# Text of every node of a class, independent of attribute order inside the node.
+texts_of_class() { grep -o "<node[^>]*class=\"$1\"[^>]*>" <<<"$2" | grep -o 'text="[^"]*"' | sed 's/text="\(.*\)"/\1/' | grep -v '^$'; }
 settings_json() { sh run-as "$PKG" cat files/settings.json; }
-home_rows() { grep -o "<node[^>]*class=\"android.widget.TextView\"[^>]*package=\"$PKG\"[^>]*>" <<<"$1" | grep -o 'text="[^"]\+"' | sed 's/text="\(.*\)"/\1/'; }
+home_rows() { grep -o "<node[^>]*package=\"$PKG\"[^>]*>" <<<"$1" | grep 'class="android.widget.TextView"' | grep -o 'text="[^"]\+"' | sed 's/text="\(.*\)"/\1/'; }
 crash_count() { $ADB logcat -d -b crash 2>/dev/null | tr -d '\r' | grep -c "$PKG" || true; }
 go_home() { sh am start -W -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1; wait_s 2; }
 
@@ -81,11 +91,9 @@ wait_s 1; sh input keyevent KEYCODE_BACK >/dev/null; wait_s 1
 # 5. Home apps: removing a row pins the alphabetical six and drops one.
 tap_text "Home apps" || ko "Home apps row"
 ui=$(dump); has_text "6 of 16 on the home screen. Tap to add or remove, hold to reorder." "$ui" && ok "home apps summary shows 6 of 16" || ko "home apps summary shows 6 of 16"
-first=$(grep -o 'class="android.widget.CheckedTextView"[^>]*text="[^"]*"' <<<"$ui" | head -1 | grep -o 'text="[^"]*"' | sed 's/text="\(.*\)"/\1/')
-# CheckedTextView nodes put text before class in the dump on some versions; fall back to the first checked row
-[ -z "$first" ] && first=$(grep -o 'text="[^"]*"[^>]*class="android.widget.CheckedTextView"' <<<"$ui" | head -1 | grep -o 'text="[^"]*"' | sed 's/text="\(.*\)"/\1/')
+first=$(texts_of_class "android.widget.CheckedTextView" "$ui" | head -1)
 info "first home app row: '$first'"
-tap_text "$first" || ko "tap first home app row"
+{ [ -n "$first" ] && tap_text "$first"; } || ko "tap first home app row"
 ui=$(dump); has_text "5 of 16 on the home screen. Tap to add or remove, hold to reorder." "$ui" && ok "removing a row leaves 5 of 16" || ko "removing a row leaves 5 of 16"
 json=$(settings_json); n=$(grep -c '"component":' <<<"$(sed -n '/"entries"/,/\]/p' <<<"$json")")
 [ "$n" = "5" ] && ok "five explicit entries persisted" || ko "five explicit entries persisted (found $n)"
@@ -94,30 +102,28 @@ has_text "6 of 16 on the home screen. Tap to add or remove, hold to reorder." "$
 sh input keyevent KEYCODE_HOME >/dev/null; wait_s 2
 
 # 6. App menu: rename, reset, hide, unhide.
-ui=$(dump); row=$(home_rows "$ui" | grep -vE '^[0-9]{1,2}:[0-9]{2}|%$|'"$weekday" | tail -1)
+ui=$(dump); row=$(home_rows "$ui" | grep -vE '^[0-9]{1,2}:[0-9]{2}|%|'"$weekday" | tail -1)
 info "menu target row: '$row'"
-b=$(bounds_of "$row" "$ui"); read -r x1 y1 x2 y2 <<<"$b"
-sh input swipe $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )) $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )) 1200 >/dev/null; wait_s 2
+if [ -z "$row" ]; then ko "no app row found for the menu checks"; else
+long_press_text "$row" || ko "long-press on the row"
 ui=$(dump); has_text "Rename" "$ui" && has_text "App info" "$ui" && ok "long-press on a row opens the app menu" || ko "long-press on a row opens the app menu"
 tap_text "Rename" || ko "Rename item"
 sh input keyevent KEYCODE_MOVE_END >/dev/null; sh input keyevent --longpress KEYCODE_DEL >/dev/null; sh input text "Renamed" >/dev/null; wait_s 1
 tap_text "OK" || ko "OK button of the rename dialog"
 has_text "Renamed" "$(dump)" && ok "renamed row shows the new label" || ko "renamed row shows the new label"
 grep -q '"label": "Renamed"' <<<"$(settings_json)" && ok "rename persisted" || ko "rename persisted"
-b=$(bounds_of "Renamed" "$(dump)"); read -r x1 y1 x2 y2 <<<"$b"
-sh input swipe $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )) $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )) 1200 >/dev/null; wait_s 2
+long_press_text "Renamed" || ko "long-press on the renamed row"
 tap_text "Rename" || ko "Rename item (second time)"
 tap_text "Use original name" || ko "Use original name button"
 has_text "$row" "$(dump)" && ok "rename reset restores the system label" || ko "rename reset restores the system label"
-b=$(bounds_of "$row" "$(dump)"); read -r x1 y1 x2 y2 <<<"$b"
-sh input swipe $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )) $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )) 1200 >/dev/null; wait_s 2
+long_press_text "$row" || ko "long-press for hide"
 tap_text "Hide from search" || ko "Hide item"
-grep -q '"hidden": \[' <<<"$(settings_json)" && grep -A3 '"hidden": \[' <<<"$(settings_json)" | grep -q '"component"' && ok "hide persisted" || ko "hide persisted"
+grep -A3 '"hidden": \[' <<<"$(settings_json)" | grep -q '"component"' && ok "hide persisted" || ko "hide persisted"
 has_text "$row" "$(dump)" && ok "a hidden app stays on the home list" || ko "a hidden app stays on the home list"
-b=$(bounds_of "$row" "$(dump)"); read -r x1 y1 x2 y2 <<<"$b"
-sh input swipe $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )) $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )) 1200 >/dev/null; wait_s 2
+long_press_text "$row" || ko "long-press for unhide"
 tap_text "Show in search" || ko "Show in search item"
 grep -q '"hidden": \[\]' <<<"$(settings_json)" && ok "unhide persisted" || ko "unhide persisted"
+fi
 
 # 7. Persistence across a process restart.
 sh am force-stop "$PKG" >/dev/null; wait_s 1; go_home

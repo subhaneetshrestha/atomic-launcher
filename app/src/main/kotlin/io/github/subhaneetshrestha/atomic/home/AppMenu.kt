@@ -47,7 +47,15 @@ class AppMenu(
         items += R.string.menu_rename to { showRename(entry) }
         items +=
             (if (hidden) R.string.menu_unhide else R.string.menu_hide) to
-            { settings.update { SettingsEdits.setHidden(it, ref, !hidden) } }
+            {
+                settings.update {
+                    SettingsEdits.setHidden(
+                        SettingsEdits.materializeHome(it, visibleRefs),
+                        ref,
+                        !hidden,
+                    )
+                }
+            }
         items += R.string.menu_app_info to { actions.showAppInfo(entry, anchor) }
         if (!entry.isSystem) items += R.string.menu_uninstall to { actions.uninstall(entry) }
 

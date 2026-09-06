@@ -97,7 +97,9 @@ class SettingsActivity : ThemedActivity() {
                 }
             },
         )
-        push(MenuScreen())
+        val saved = savedInstanceState?.getIntArray(STATE_STACK)?.map { ScreenId.entries[it] } ?: listOf(ScreenId.MENU)
+        for (id in saved.dropLast(1)) stack.addLast(screenFor(id))
+        push(screenFor(saved.last()))
     }
 
     override fun onStart() {
@@ -110,6 +112,22 @@ class SettingsActivity : ThemedActivity() {
         settings.flush()
         super.onStop()
     }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putIntArray(STATE_STACK, stack.map { it.id.ordinal }.toIntArray())
+    }
+
+    private fun screenFor(id: ScreenId): Screen =
+        when (id) {
+            ScreenId.MENU -> MenuScreen()
+            ScreenId.HOME_APPS -> HomeAppsScreen()
+            ScreenId.HIDDEN_APPS -> HiddenAppsScreen()
+            ScreenId.THEME -> ThemeScreen()
+            ScreenId.APPEARANCE -> AppearanceScreen()
+            ScreenId.BACKUP -> BackupScreen()
+            ScreenId.ABOUT -> AboutScreen()
+        }
 
     private fun push(screen: Screen) {
         stack.addLast(screen)
@@ -149,7 +167,10 @@ class SettingsActivity : ThemedActivity() {
 
     // ---- screens ------------------------------------------------------------------------------
 
+    private enum class ScreenId { MENU, HOME_APPS, HIDDEN_APPS, THEME, APPEARANCE, BACKUP, ABOUT }
+
     private abstract inner class Screen(
+        val id: ScreenId,
         val titleRes: Int,
     ) {
         abstract fun createView(): View
@@ -157,7 +178,7 @@ class SettingsActivity : ThemedActivity() {
         open fun refresh() = Unit
     }
 
-    private inner class MenuScreen : Screen(R.string.settings_title) {
+    private inner class MenuScreen : Screen(ScreenId.MENU, R.string.settings_title) {
         override fun createView(): View {
             val items =
                 listOf(
@@ -174,7 +195,7 @@ class SettingsActivity : ThemedActivity() {
     }
 
     /** All apps, home apps first in their order; tap toggles membership, hold reorders. */
-    private inner class HomeAppsScreen : Screen(R.string.settings_home_apps) {
+    private inner class HomeAppsScreen : Screen(ScreenId.HOME_APPS, R.string.settings_home_apps) {
         private lateinit var adapter: RowAdapter
         private lateinit var summary: TextView
         private var ordered: List<AppEntry> = emptyList()
@@ -259,7 +280,7 @@ class SettingsActivity : ThemedActivity() {
         }
     }
 
-    private inner class HiddenAppsScreen : Screen(R.string.settings_hidden_apps) {
+    private inner class HiddenAppsScreen : Screen(ScreenId.HIDDEN_APPS, R.string.settings_hidden_apps) {
         private lateinit var adapter: RowAdapter
         private var entries: List<AppEntry> = emptyList()
 
@@ -300,7 +321,7 @@ class SettingsActivity : ThemedActivity() {
         }
     }
 
-    private inner class ThemeScreen : Screen(R.string.settings_theme) {
+    private inner class ThemeScreen : Screen(ScreenId.THEME, R.string.settings_theme) {
         override fun createView(): View {
             val themes = BuiltinThemes.all
             val currentId = settings.settings.theme.meta.id
@@ -321,7 +342,7 @@ class SettingsActivity : ThemedActivity() {
         }
     }
 
-    private inner class AppearanceScreen : Screen(R.string.settings_appearance) {
+    private inner class AppearanceScreen : Screen(ScreenId.APPEARANCE, R.string.settings_appearance) {
         override fun createView(): View {
             val modes =
                 listOf(
@@ -349,7 +370,7 @@ class SettingsActivity : ThemedActivity() {
         }
     }
 
-    private inner class BackupScreen : Screen(R.string.settings_backup) {
+    private inner class BackupScreen : Screen(ScreenId.BACKUP, R.string.settings_backup) {
         override fun createView(): View {
             val rows =
                 listOf(
@@ -365,7 +386,7 @@ class SettingsActivity : ThemedActivity() {
         }
     }
 
-    private inner class AboutScreen : Screen(R.string.settings_about) {
+    private inner class AboutScreen : Screen(ScreenId.ABOUT, R.string.settings_about) {
         private lateinit var adapter: RowAdapter
 
         override fun createView(): View {
@@ -523,6 +544,7 @@ class SettingsActivity : ThemedActivity() {
 
     private companion object {
         const val TAG = "SettingsActivity"
+        const val STATE_STACK = "stack"
         const val MAX_IMPORT_BYTES = 1_000_000
     }
 }

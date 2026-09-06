@@ -51,6 +51,11 @@ class SetupActivity : ThemedActivity() {
         colors = atomicApp.resolvedColors(this)
         window.decorView.setBackgroundColor(colors.background)
         defaultHome = DefaultHomePrompt(this)
+        step = savedInstanceState?.getInt(STATE_STEP) ?: 0
+        savedInstanceState?.getStringArray(STATE_CHOSEN)?.forEach { flat ->
+            val (component, user) = flat.split('|')
+            AppKey.fromComponent(component, user.toLong())?.let(chosen::add)
+        }
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
@@ -63,10 +68,16 @@ class SetupActivity : ThemedActivity() {
         content = FrameLayout(this)
         val skip =
             Button(this).apply {
+                isAllCaps = false
+
                 setText(R.string.setup_skip)
                 setOnClickListener { finishSetup() }
             }
-        next = Button(this).apply { setOnClickListener { advance() } }
+        next =
+            Button(this).apply {
+                isAllCaps = false
+                setOnClickListener { advance() }
+            }
         val bar =
             LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -94,6 +105,12 @@ class SetupActivity : ThemedActivity() {
             },
         )
         showStep()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(STATE_STEP, step)
+        outState.putStringArray(STATE_CHOSEN, chosen.map { "${it.flattenedComponent}|${it.userSerial}" }.toTypedArray())
     }
 
     private fun advance() {
@@ -197,6 +214,8 @@ class SetupActivity : ThemedActivity() {
             } else {
                 addView(
                     Button(context).apply {
+                        isAllCaps = false
+
                         setText(R.string.setup_set_default)
                         setOnClickListener { defaultHome.request(roleRequest) }
                     },
@@ -218,5 +237,7 @@ class SetupActivity : ThemedActivity() {
 
     private companion object {
         const val LAST_STEP = 2
+        const val STATE_STEP = "step"
+        const val STATE_CHOSEN = "chosen"
     }
 }
