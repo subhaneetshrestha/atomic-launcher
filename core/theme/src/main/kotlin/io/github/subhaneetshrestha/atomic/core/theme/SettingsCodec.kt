@@ -62,6 +62,9 @@ object SettingsCodec {
         }
     }
 
+    /** The `schema` number a document declares, or null when it has none or is not JSON. */
+    fun documentSchema(text: String): Int? = parseObject(text)?.get("schema")?.jsonPrimitive?.intOrNull
+
     private fun parseObject(text: String): JsonObject? {
         val element: JsonElement =
             try {
