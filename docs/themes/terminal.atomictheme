@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "minAppVersion": 1,
+  "meta": {
+    "id": "terminal",
+    "name": "Terminal",
+    "author": "atomic",
+    "license": "CC0-1.0",
+    "description": "Monospace with a phosphor green accent."
+  },
+  "colors": {
+    "background": "#FF0B0F0A",
+    "text": "#FFB8F5B0",
+    "textSecondary": "#99B8F5B0",
+    "accent": "#FF39FF14"
+  },
+  "typography": {
+    "family": "monospace",
+    "weight": 400,
+    "italic": false,
+    "sizes": {
+      "homeSp": 22.0,
+      "clockSp": 40.0,
+      "infoSp": 13.0
+    }
+  },
+  "layout": {
+    "hAlign": "start",
+    "vAlign": "top",
+    "paddingDp": {
+      "h": 24,
+      "v": 40
+    },
+    "rowGapDp": 4
+  }
+}

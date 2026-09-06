@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "minAppVersion": 1,
+  "meta": {
+    "id": "ink",
+    "name": "Ink",
+    "author": "atomic",
+    "license": "CC0-1.0",
+    "description": "White text on black. Always legible."
+  },
+  "colors": {
+    "background": "#FF000000",
+    "text": "#FFF2F2F2",
+    "textSecondary": "#99F2F2F2",
+    "accent": "#FFF2F2F2"
+  },
+  "typography": {
+    "family": "sans-serif",
+    "weight": 400,
+    "italic": false,
+    "sizes": {
+      "homeSp": 24.0,
+      "clockSp": 48.0,
+      "infoSp": 14.0
+    }
+  },
+  "layout": {
+    "hAlign": "center",
+    "vAlign": "center",
+    "paddingDp": {
+      "h": 28,
+      "v": 24
+    },
+    "rowGapDp": 4
+  }
+}

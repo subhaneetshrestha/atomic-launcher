@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "minAppVersion": 1,
+  "meta": {
+    "id": "paper",
+    "name": "Paper",
+    "author": "atomic",
+    "license": "CC0-1.0",
+    "description": "Dark serif on warm paper; inverts at night."
+  },
+  "colors": {
+    "background": "#FFF6F1E7",
+    "text": "#FF1B1B1B",
+    "textSecondary": "#991B1B1B",
+    "accent": "#FF1B1B1B"
+  },
+  "darkColors": {
+    "background": "#FF141210",
+    "text": "#FFEDE7DA",
+    "textSecondary": "#99EDE7DA",
+    "accent": "#FFEDE7DA"
+  },
+  "typography": {
+    "family": "serif",
+    "weight": 400,
+    "italic": false,
+    "sizes": {
+      "homeSp": 24.0,
+      "clockSp": 48.0,
+      "infoSp": 14.0
+    }
+  },
+  "layout": {
+    "hAlign": "start",
+    "vAlign": "bottom",
+    "paddingDp": {
+      "h": 28,
+      "v": 56
+    },
+    "rowGapDp": 6
+  }
+}
