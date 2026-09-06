@@ -40,7 +40,7 @@ class HomeListView(
         rows.forEachIndexed { index, row ->
             val view = getChildAt(index) as TextView
             view.tag = row.entry
-            view.text = row.entry.label
+            view.text = row.label
             view.alpha = if (row.entry.isSuspended) SUSPENDED_ALPHA else 1f
             applier.applyRow(view, settings)
             (view.layoutParams as LayoutParams).topMargin = if (index == 0) 0 else gap

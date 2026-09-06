@@ -52,4 +52,25 @@ class HomeListModelTest {
     fun `no apps yields no rows`() {
         assertEquals(emptyList(), HomeListModel.build(emptyList(), HomeSettings()))
     }
+
+    @Test
+    fun `row labels prefer the override over the system label`() {
+        val settings =
+            HomeSettings(
+                homeApps = listOf(key("c.maps"), key("a.calc")),
+                labelOverrides =
+                    mapOf(key("a.calc") to "Sums"),
+            )
+
+        assertEquals(listOf("Maps", "Sums"), HomeListModel.build(alphabetical, settings).map { it.label })
+    }
+
+    @Test
+    fun `the alphabetical fallback skips hidden apps but a configured hidden app stays`() {
+        val fallback = HomeSettings(homeAppCount = 2, hidden = setOf(key("a.calc")))
+        assertEquals(listOf("Camera", "Maps"), HomeListModel.build(alphabetical, fallback).map { it.label })
+
+        val configured = HomeSettings(homeApps = listOf(key("a.calc")), hidden = setOf(key("a.calc")))
+        assertEquals(listOf("Calculator"), HomeListModel.build(alphabetical, configured).map { it.label })
+    }
 }

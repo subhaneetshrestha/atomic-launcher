@@ -13,4 +13,20 @@ data class AppKey(
 ) {
     val flattenedComponent: String
         get() = "$packageName/$activityName"
+
+    companion object {
+        /** Parses `package/class`; a class starting with `.` is relative to the package. Null when malformed. */
+        fun fromComponent(
+            component: String,
+            userSerial: Long,
+        ): AppKey? {
+            val slash = component.indexOf('/')
+            if (slash <= 0 || slash == component.lastIndex) return null
+            val packageName = component.substring(0, slash)
+            val rawClass = component.substring(slash + 1)
+            if (packageName.any { it.isWhitespace() } || rawClass.any { it.isWhitespace() }) return null
+            val activityName = if (rawClass.startsWith(".")) packageName + rawClass else rawClass
+            return AppKey(packageName, activityName, userSerial)
+        }
+    }
 }
