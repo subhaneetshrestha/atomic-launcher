@@ -18,8 +18,17 @@ data class Settings(
     val hidden: List<AppRef> = emptyList(),
     val renames: List<Rename> = emptyList(),
     val homeInfo: HomeInfoConfig = HomeInfoConfig(),
+    val gestures: GestureConfig = GestureConfig(),
     val appearance: Appearance = Appearance(),
-)
+) {
+    /** What this surface does: the stored binding, else what the launcher ships, else nothing. */
+    fun binding(surface: BindingSurface): Action =
+        when (surface) {
+            is BindingSurface.Gesture -> gestures.binding(surface.id)
+            is BindingSurface.InfoTap -> homeInfo.tap(surface.id)
+            is BindingSurface.InfoLongPress -> homeInfo.longPress(surface.id)
+        }
+}
 
 @Serializable
 data class AppState(
@@ -63,7 +72,49 @@ data class HomeInfoConfig(
     val date: InfoLine = InfoLine(enabled = true),
     val battery: InfoLine = InfoLine(enabled = true),
     val screenTime: InfoLine = InfoLine(enabled = false),
-)
+) {
+    fun line(id: InfoLineId): InfoLine =
+        when (id) {
+            InfoLineId.CLOCK -> clock
+            InfoLineId.DATE -> date
+            InfoLineId.BATTERY -> battery
+            InfoLineId.SCREEN_TIME -> screenTime
+        }
+
+    fun withLine(
+        id: InfoLineId,
+        line: InfoLine,
+    ): HomeInfoConfig =
+        when (id) {
+            InfoLineId.CLOCK -> copy(clock = line)
+            InfoLineId.DATE -> copy(date = line)
+            InfoLineId.BATTERY -> copy(battery = line)
+            InfoLineId.SCREEN_TIME -> copy(screenTime = line)
+        }
+
+    /** The stored tap binding, else the one the line ships with. */
+    fun tap(id: InfoLineId): Action = line(id).onTap ?: id.defaultTap
+
+    fun longPress(id: InfoLineId): Action = line(id).onLongPress ?: Action.None
+}
+
+/** The four lines that can sit above or below the app list. [key] is the stored form. */
+enum class InfoLineId(
+    val key: String,
+    val defaultTap: Action,
+) {
+    CLOCK("clock", Action.Builtin(BuiltinId.ALARMS)),
+    DATE("date", Action.Builtin(BuiltinId.CALENDAR_TODAY)),
+    BATTERY("battery", Action.Builtin(BuiltinId.BATTERY_SETTINGS)),
+    SCREEN_TIME("screen_time", Action.None),
+    ;
+
+    companion object {
+        private val byKey = entries.associateBy { it.key }
+
+        fun fromKey(key: String): InfoLineId? = byKey[key]
+    }
+}
 
 @Serializable
 enum class InfoPosition {
@@ -79,6 +130,9 @@ data class InfoLine(
     val enabled: Boolean = false,
     /** Line-specific format; null means the locale default. */
     val format: String? = null,
+    /** null means the action the line ships with; [Action.None] means the user unbound it. */
+    val onTap: Action? = null,
+    val onLongPress: Action? = null,
 )
 
 @Serializable

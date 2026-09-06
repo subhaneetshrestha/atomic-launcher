@@ -90,4 +90,70 @@ class SettingsEditsTest {
             "an already configured list is left alone",
         )
     }
+
+    @Test
+    fun `binding a surface stores it, unbinding stores an explicit nothing, and clearing restores the shipped one`() {
+        val doubleTap = BindingSurface.Gesture(GestureId.DOUBLE_TAP)
+        val swipeLeft = BindingSurface.Gesture(GestureId.SWIPE_LEFT)
+
+        val bound = SettingsEdits.bind(Settings(), doubleTap, Action.Builtin(BuiltinId.LOCK_SCREEN))
+        assertEquals(Action.Builtin(BuiltinId.LOCK_SCREEN), bound.binding(doubleTap))
+        assertEquals(
+            bound,
+            SettingsEdits.bind(bound, doubleTap, Action.Builtin(BuiltinId.LOCK_SCREEN)),
+            "rebinding the same action changes nothing",
+        )
+
+        val unbound = SettingsEdits.bind(bound, swipeLeft, Action.None)
+        assertEquals(
+            Action.None,
+            unbound.gestures.bindings[GestureId.SWIPE_LEFT.key],
+            "written down, so the shipped default cannot come back",
+        )
+        assertEquals(Action.None, unbound.binding(swipeLeft))
+
+        val cleared = SettingsEdits.bind(unbound, swipeLeft, null)
+        assertEquals(
+            Action.Builtin(BuiltinId.CAMERA),
+            cleared.binding(swipeLeft),
+            "clearing falls back to what the launcher ships",
+        )
+        assertEquals(false, GestureId.SWIPE_LEFT.key in cleared.gestures.bindings.keys)
+    }
+
+    @Test
+    fun `the two surfaces of an info line are bound independently`() {
+        val tap = BindingSurface.InfoTap(InfoLineId.CLOCK)
+        val hold = BindingSurface.InfoLongPress(InfoLineId.CLOCK)
+
+        val tapped = SettingsEdits.bind(Settings(), tap, Action.None)
+        assertEquals(Action.None, tapped.binding(tap))
+        assertEquals(Action.None, tapped.binding(hold), "nothing is bound to a hold by default")
+
+        val held = SettingsEdits.bind(tapped, hold, Action.Builtin(BuiltinId.SETTINGS))
+        assertEquals(Action.Builtin(BuiltinId.SETTINGS), held.binding(hold))
+        assertEquals(Action.None, held.binding(tap), "the tap the user unbound stays unbound")
+        assertEquals(Action.Builtin(BuiltinId.ALARMS), SettingsEdits.bind(held, tap, null).binding(tap))
+        assertEquals(
+            Action.Builtin(BuiltinId.CALENDAR_TODAY),
+            held.binding(BindingSurface.InfoTap(InfoLineId.DATE)),
+            "another line is untouched",
+        )
+    }
+
+    @Test
+    fun `every surface has a stable key for the settings list`() {
+        assertEquals("gesture:swipe_up", BindingSurface.Gesture(GestureId.SWIPE_UP).key)
+        assertEquals("clock:tap", BindingSurface.InfoTap(InfoLineId.CLOCK).key)
+        assertEquals("battery:hold", BindingSurface.InfoLongPress(InfoLineId.BATTERY).key)
+        assertEquals(
+            BindingSurface.all.size,
+            BindingSurface.all
+                .map { it.key }
+                .toSet()
+                .size,
+            "keys are unique",
+        )
+        assertEquals(GestureId.entries.size + InfoLineId.entries.size * 2, BindingSurface.all.size)
+    }
 }

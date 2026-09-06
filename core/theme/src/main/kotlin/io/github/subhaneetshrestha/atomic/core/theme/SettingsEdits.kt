@@ -3,6 +3,44 @@ package io.github.subhaneetshrestha.atomic.core.theme
 /** Pure edits the settings screens and the app menu apply through SettingsStore.update. */
 object SettingsEdits {
     /**
+     * Binds [action] to [surface]. [Action.None] is stored explicitly, so an unbound gesture stays
+     * unbound; a null [action] removes the entry, which brings back the shipped default.
+     */
+    fun bind(
+        settings: Settings,
+        surface: BindingSurface,
+        action: Action?,
+    ): Settings =
+        when (surface) {
+            is BindingSurface.Gesture -> {
+                val current = settings.gestures.bindings
+                val next = LinkedHashMap(current)
+                if (action == null) next.remove(surface.id.key) else next[surface.id.key] = action
+                if (next == current) settings else settings.copy(gestures = settings.gestures.copy(bindings = next))
+            }
+
+            is BindingSurface.InfoTap -> {
+                val line = settings.homeInfo.line(surface.id)
+                if (line.onTap ==
+                    action
+                ) {
+                    settings
+                } else {
+                    settings.copy(homeInfo = settings.homeInfo.withLine(surface.id, line.copy(onTap = action)))
+                }
+            }
+
+            is BindingSurface.InfoLongPress -> {
+                val line = settings.homeInfo.line(surface.id)
+                if (line.onLongPress == action) {
+                    settings
+                } else {
+                    settings.copy(homeInfo = settings.homeInfo.withLine(surface.id, line.copy(onLongPress = action)))
+                }
+            }
+        }
+
+    /**
      * Before the first edit, an empty home list means "the first apps alphabetically". Editing must
      * not silently replace those rows with just the edited one, so they become explicit entries first.
      */

@@ -16,8 +16,113 @@ internal class Sanitizer {
                 ),
             hidden = hidden(settings.hidden),
             renames = renames(settings.renames),
+            homeInfo = homeInfo(settings.homeInfo),
+            gestures = gestures(settings.gestures),
             theme = theme(settings.theme, prefix = "theme."),
         )
+
+    /**
+     * Gesture bindings. A key this version does not know is kept exactly as written (a newer app
+     * put it there and can still run it); a binding we can run is checked and unbound if broken.
+     */
+    private fun gestures(config: GestureConfig): GestureConfig {
+        val bindings = LinkedHashMap<String, Action>(config.bindings.size)
+        for ((key, bound) in config.bindings) {
+            val path = "gestures.bindings.$key"
+            if (GestureId.fromKey(key) == null) {
+                warnings += Warning(path, "no gesture called '$key' in this version; kept but inert")
+                bindings[key] = bound
+            } else {
+                bindings[key] = action(bound, path)
+            }
+        }
+        return config.copy(bindings = bindings)
+    }
+
+    private fun homeInfo(config: HomeInfoConfig): HomeInfoConfig {
+        var result = config
+        for (id in InfoLineId.entries) {
+            val line = config.line(id)
+            val tap = line.onTap?.let { action(it, "homeInfo.${id.key}.onTap") }
+            val longPress = line.onLongPress?.let { action(it, "homeInfo.${id.key}.onLongPress") }
+            if (tap != line.onTap || longPress != line.onLongPress) {
+                result = result.withLine(id, line.copy(onTap = tap, onLongPress = longPress))
+            }
+        }
+        return result
+    }
+
+    /** An action we cannot carry out is turned into [Action.None] rather than left to fail at the tap. */
+    private fun action(
+        value: Action,
+        path: String,
+    ): Action {
+        val problem = problemWith(value) ?: return value
+        warnings += Warning(path, "$problem; unbound")
+        return Action.None
+    }
+
+    private fun problemWith(value: Action): String? =
+        when (value) {
+            Action.None, is Action.Builtin, is Action.Unknown -> {
+                null
+            }
+
+            is Action.OpenApp -> {
+                componentProblem(value.component, value.user)
+            }
+
+            is Action.AppInfo -> {
+                componentProblem(value.component, value.user)
+            }
+
+            is Action.Shortcut -> {
+                packageProblem(value.pkg, value.user) ?: "the shortcut has no id".takeIf { value.id.isBlank() }
+            }
+
+            is Action.Uninstall -> {
+                packageProblem(value.pkg, value.user)
+            }
+
+            is Action.OpenUrl -> {
+                urlProblem(value.url)
+            }
+        }
+
+    private fun componentProblem(
+        component: String,
+        user: Long,
+    ): String? =
+        when {
+            !COMPONENT.matches(component) -> "'$component' is not a component name (package/class)"
+            user < 0 -> "user serial $user is negative"
+            else -> null
+        }
+
+    private fun packageProblem(
+        pkg: String,
+        user: Long,
+    ): String? =
+        when {
+            !PACKAGE.matches(pkg) -> "'$pkg' is not a package name"
+            user < 0 -> "user serial $user is negative"
+            else -> null
+        }
+
+    /**
+     * A link must name a scheme, and not one that aims at a component or at our own files:
+     * `intent:` and `android-app:` can start arbitrary components with arbitrary extras, and
+     * `file:`/`content:` could hand a viewer something private.
+     */
+    private fun urlProblem(url: String): String? {
+        val scheme =
+            URL_SCHEME
+                .find(url)
+                ?.groupValues
+                ?.get(1)
+                ?.lowercase() ?: return "'$url' does not start with a scheme"
+        return if (scheme in BLOCKED_SCHEMES) "a $scheme: link is not safe to open from a binding" else null
+    }
 
     private fun homeEntries(entries: List<HomeEntry>): List<HomeEntry> {
         val seen = HashSet<Pair<String, Long>>()
@@ -254,3 +359,10 @@ object HomeLimits {
 
 /** `package/class`, the flattened ComponentName form; the class may be relative (`.Main`). */
 private val COMPONENT = Regex("^[A-Za-z][\\w.]*/[\\w.$]+$")
+
+/** A package name: no whitespace, dot-separated. */
+private val PACKAGE = Regex("^[A-Za-z][\\w.]*$")
+
+private val URL_SCHEME = Regex("^([A-Za-z][A-Za-z0-9+.\\-]*):")
+
+private val BLOCKED_SCHEMES = setOf("intent", "android-app", "file", "content", "javascript", "data")
