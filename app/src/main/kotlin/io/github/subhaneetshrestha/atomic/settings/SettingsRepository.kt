@@ -1,6 +1,7 @@
 package io.github.subhaneetshrestha.atomic.settings
 
 import android.content.Context
+import android.os.StrictMode
 import io.github.subhaneetshrestha.atomic.core.theme.Settings
 import io.github.subhaneetshrestha.atomic.core.theme.SettingsStore
 import io.github.subhaneetshrestha.atomic.util.Logs
@@ -36,7 +37,15 @@ class SettingsRepository(
 
     fun update(transform: (Settings) -> Settings) = store.update(transform)
 
-    fun flush() = store.flush()
+    /** Writes pending changes now (onStop, setup done). A few kilobytes, so the main-thread write is deliberate. */
+    fun flush() {
+        val policy = StrictMode.allowThreadDiskWrites()
+        try {
+            store.flush()
+        } finally {
+            StrictMode.setThreadPolicy(policy)
+        }
+    }
 
     fun addDocumentListener(listener: (old: Settings, new: Settings) -> Unit) {
         documentListeners.addIfAbsent(listener)

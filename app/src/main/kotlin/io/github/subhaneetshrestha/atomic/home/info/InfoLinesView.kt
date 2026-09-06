@@ -71,7 +71,7 @@ class InfoLinesView(
         this.config = config
         val gravity = applier.horizontalGravity(view.horizontalAlignment)
         val sizes = theme.typography.sizes
-        applier.applyText(clock, view.font, sizes.clockSp, colors.text, gravity)
+        applier.applyText(clock, view.font, sizes.clockSp, colors.text, gravity, maxFontScale = CLOCK_MAX_FONT_SCALE)
         applier.applyText(date, view.font, sizes.infoSp, colors.textSecondary, gravity)
         applier.applyText(battery, view.font, sizes.infoSp, colors.textSecondary, gravity)
         clock.format12Hour = config.clock.format
@@ -137,5 +137,8 @@ class InfoLinesView(
 
     private companion object {
         const val MIDNIGHT_SLACK_MS = 500L
+
+        /** The clock is decoration: it follows the font size setting only up to this factor. */
+        const val CLOCK_MAX_FONT_SCALE = 1.3f
     }
 }

@@ -24,7 +24,8 @@ info() { echo "INFO  $1"; }
 sh() { $ADB shell "$@" 2>/dev/null | tr -d '\r'; }
 wait_s() { $ADB shell sleep "$1" >/dev/null 2>&1; }
 dump() { $ADB shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; $ADB shell cat /sdcard/ui.xml 2>/dev/null | tr -d '\r'; }
-rows() { grep -o "<node[^>]*class=\"android.widget.TextView\"[^>]*package=\"$PKG\"[^>]*>" <<<"$1" | grep -o 'text="[^"]\+"' | grep -v "$BANNER" | sed 's/text="\(.*\)"/\1/'; }
+# App rows only: TextViews of ours minus the banner and the info lines (clock, date, battery).
+rows() { grep -o "<node[^>]*class=\"android.widget.TextView\"[^>]*package=\"$PKG\"[^>]*>" <<<"$1" | grep -o 'text="[^"]\+"' | grep -v "$BANNER" | sed 's/text="\(.*\)"/\1/' | grep -vE '^[0-9]{1,2}:[0-9]{2}|^[0-9]{1,3}%|^(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day'; }
 top_activity() {
   local a
   a=$(sh dumpsys activity activities | grep -m1 -o 'topResumedActivity=ActivityRecord{[^}]*}')

@@ -45,10 +45,11 @@ class AtomicApp : Application() {
         Logs.enabled = debuggable
         if (debuggable) installStrictMode()
         crashEnvironment = crashEnvironment()
-        crashRecorder = CrashRecorder(filesDir, { Instant.now() }, crashEnvironment).also { it.install() }
-        // One small file, read once, so the home screen never shows a loading state.
-        val policy = StrictMode.allowThreadDiskReads()
+        // Startup touches disk once on purpose: the private directory is created on first access
+        // and the settings file (a few KB) is read synchronously so the first frame is final.
+        val policy = StrictMode.allowThreadDiskWrites()
         try {
+            crashRecorder = CrashRecorder(filesDir, { Instant.now() }, crashEnvironment).also { it.install() }
             settingsRepository = SettingsRepository(this)
         } finally {
             StrictMode.setThreadPolicy(policy)

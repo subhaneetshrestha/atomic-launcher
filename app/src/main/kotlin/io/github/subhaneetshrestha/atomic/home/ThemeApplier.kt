@@ -85,9 +85,16 @@ class ThemeApplier(
         color: Int,
         horizontalGravity: Int,
         minHeightDp: Int = 48,
+        maxFontScale: Float? = null,
     ) {
         view.typeface = typeface(font)
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+        if (maxFontScale == null) {
+            view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+        } else {
+            // Decorative text (the clock) would otherwise push the app rows off screen at 200%.
+            val scale = minOf(context.resources.configuration.fontScale, maxFontScale)
+            view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, sizeSp * scale)
+        }
         view.setTextColor(color)
         view.minHeight = dp(minHeightDp)
         view.gravity = Gravity.CENTER_VERTICAL or horizontalGravity
