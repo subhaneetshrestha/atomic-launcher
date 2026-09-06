@@ -2,12 +2,14 @@ package io.github.subhaneetshrestha.atomic.core.theme
 
 import kotlin.math.pow
 
-/** The four colour roles as ARGB ints, ready for Paint and TextView. */
+/** The colour roles as ARGB ints, ready for Paint and TextView. */
 data class ResolvedColors(
     val background: Int,
     val text: Int,
     val textSecondary: Int,
     val accent: Int,
+    val badgeBackground: Int,
+    val badgeText: Int,
 )
 
 /**
@@ -26,11 +28,30 @@ class ThemeResolver(
         val base = theme.colors
         val over = if (night) theme.darkColors else null
         val background = concrete(over?.background ?: base.background, FALLBACK.background)
+        val text = text(over?.text ?: base.text, background, FALLBACK.text)
+        val badge = theme.badge
         return ResolvedColors(
             background = background,
-            text = text(over?.text ?: base.text, background, FALLBACK.text),
+            text = text,
             textSecondary = text(over?.textSecondary ?: base.textSecondary, background, FALLBACK.textSecondary),
             accent = concrete(over?.accent ?: base.accent, FALLBACK.accent),
+            badgeBackground =
+                if (badge.background ==
+                    ColorValue.AUTO
+                ) {
+                    text
+                } else {
+                    concrete(badge.background, FALLBACK.text)
+                },
+            badgeText =
+                if (badge.text == ColorValue.AUTO) {
+                    background
+                } else {
+                    concrete(
+                        badge.text,
+                        FALLBACK.background,
+                    )
+                },
         )
     }
 

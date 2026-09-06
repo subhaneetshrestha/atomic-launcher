@@ -14,6 +14,8 @@ class ThemeResolverTest {
                 text = 0xFFF2F2F2.toInt(),
                 textSecondary = 0x99F2F2F2.toInt(),
                 accent = 0xFFF2F2F2.toInt(),
+                badgeBackground = 0xFFF2F2F2.toInt(),
+                badgeText = 0xFF000000.toInt(),
             ),
             noTokens.resolve(BuiltinThemes.ink, night = false),
         )

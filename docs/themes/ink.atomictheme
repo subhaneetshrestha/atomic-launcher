@@ -33,5 +33,12 @@
       "v": 24
     },
     "rowGapDp": 4
+  },
+  "badge": {
+    "style": "circle",
+    "position": "end",
+    "scale": 0.62,
+    "background": "auto",
+    "text": "auto"
   }
 }

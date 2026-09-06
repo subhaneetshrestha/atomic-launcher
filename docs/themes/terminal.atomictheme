@@ -33,5 +33,12 @@
       "v": 40
     },
     "rowGapDp": 4
+  },
+  "badge": {
+    "style": "number",
+    "position": "end",
+    "scale": 0.62,
+    "background": "#FF39FF14",
+    "text": "#FF39FF14"
   }
 }

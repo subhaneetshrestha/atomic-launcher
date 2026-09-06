@@ -33,5 +33,12 @@
       "v": 24
     },
     "rowGapDp": 4
+  },
+  "badge": {
+    "style": "circle",
+    "position": "end",
+    "scale": 0.62,
+    "background": "@android:color/system_accent1_200",
+    "text": "@android:color/system_neutral1_900"
   }
 }

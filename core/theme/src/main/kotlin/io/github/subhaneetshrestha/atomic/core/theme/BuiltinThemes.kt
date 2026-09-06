@@ -78,6 +78,7 @@ object BuiltinThemes {
                     paddingDp = Padding(h = 24, v = 40),
                     rowGapDp = 4,
                 ),
+            badge = Badge(style = BadgeStyle.NUMBER, background = "#FF39FF14", text = "#FF39FF14"),
         )
 
     val you: Theme =
@@ -96,6 +97,11 @@ object BuiltinThemes {
                     text = "@android:color/system_neutral1_50",
                     textSecondary = "@android:color/system_neutral1_200",
                     accent = "@android:color/system_accent1_200",
+                ),
+            badge =
+                Badge(
+                    background = "@android:color/system_accent1_200",
+                    text = "@android:color/system_neutral1_900",
                 ),
         )
 

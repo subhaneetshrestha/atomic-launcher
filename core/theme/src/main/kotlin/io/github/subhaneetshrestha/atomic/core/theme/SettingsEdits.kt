@@ -124,5 +124,38 @@ object SettingsEdits {
         ref: AppRef,
     ): Boolean = ref in settings.hidden
 
+    /** Whether [app] shows a badge. Storing the exceptions means a new app badges by default. */
+    fun setBadges(
+        settings: Settings,
+        app: PackageRef,
+        shown: Boolean,
+    ): Settings {
+        val current = settings.notifications.perAppDisabled
+        val next =
+            if (shown) {
+                current.filterNot { it == app }
+            } else if (app in current) {
+                current
+            } else {
+                current + app
+            }
+        if (next == current) return settings
+        return settings.copy(notifications = settings.notifications.copy(perAppDisabled = next))
+    }
+
+    /**
+     * Writes down when the user agreed to a special access, the first time they did. Kept so the
+     * app can say what it was given and when, and never used to decide whether it still has it:
+     * that is always read from the system.
+     */
+    fun recordConsent(
+        settings: Settings,
+        kind: ConsentKind,
+        atMillis: Long,
+    ): Settings {
+        if (settings.consents.containsKey(kind.key)) return settings
+        return settings.copy(consents = settings.consents + (kind.key to atMillis))
+    }
+
     private fun HomeEntry.matches(ref: AppRef) = component == ref.component && user == ref.user
 }

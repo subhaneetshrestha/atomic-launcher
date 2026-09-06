@@ -17,6 +17,7 @@ data class Theme(
     val darkColors: ColorsOverride? = null,
     val typography: Typography = Typography(),
     val layout: Layout = Layout(),
+    val badge: Badge = Badge(),
 )
 
 @Serializable
@@ -91,6 +92,45 @@ enum class VAlign {
 
     @SerialName("bottom")
     BOTTOM,
+}
+
+/**
+ * How a notification count is drawn beside an app name. Colours left at `auto` follow the name:
+ * the badge takes the text colour and the number is cut out of it in the background colour, so a
+ * badge never needs its own palette to stay legible.
+ */
+@Serializable
+data class Badge(
+    val style: BadgeStyle = BadgeStyle.CIRCLE,
+    val position: BadgePosition = BadgePosition.END,
+    /** Badge height as a fraction of the row's text size. */
+    val scale: Float = 0.62f,
+    val background: String = ColorValue.AUTO,
+    val text: String = ColorValue.AUTO,
+)
+
+@Serializable
+enum class BadgeStyle {
+    /** The count inside a filled circle (a pill once it needs three digits). */
+    @SerialName("circle")
+    CIRCLE,
+
+    /** A filled dot; the count is not shown. */
+    @SerialName("dot")
+    DOT,
+
+    /** The count as plain text, no shape behind it. */
+    @SerialName("number")
+    NUMBER,
+}
+
+@Serializable
+enum class BadgePosition {
+    @SerialName("start")
+    START,
+
+    @SerialName("end")
+    END,
 }
 
 @Serializable

@@ -20,6 +20,12 @@ data class Settings(
     val homeInfo: HomeInfoConfig = HomeInfoConfig(),
     val gestures: GestureConfig = GestureConfig(),
     val search: SearchConfig = SearchConfig(),
+    val notifications: NotificationConfig = NotificationConfig(),
+    /**
+     * When the user agreed to each special access, by [ConsentKind.key], in epoch milliseconds.
+     * A key this version does not know is kept: a newer build wrote it and will want it back.
+     */
+    val consents: Map<String, Long> = emptyMap(),
     val appearance: Appearance = Appearance(),
 ) {
     /** What this surface does: the stored binding, else what the launcher ships, else nothing. */
@@ -143,6 +149,42 @@ data class SearchConfig(
     val autoShowKeyboard: Boolean = true,
     /** Offer a web search when nothing matches. Off: the launcher makes no network calls by default. */
     val webSearchFallback: Boolean = false,
+)
+
+/**
+ * Notification badges. Off until the user asks: turning them on hands the launcher every
+ * notification the phone receives, which is not something to do quietly.
+ */
+@Serializable
+data class NotificationConfig(
+    val enabled: Boolean = false,
+    /** Count what merely sits in the shade: a playing track, a download, a running service. */
+    val includeOngoing: Boolean = false,
+    /** Apps the user wants no badge for. */
+    val perAppDisabled: List<PackageRef> = emptyList(),
+) {
+    /** Whether a badge should be drawn for [app] at all. */
+    fun shows(app: PackageRef): Boolean = enabled && app !in perAppDisabled
+}
+
+/**
+ * The special accesses the user can grant, each one behind its own disclosure. Only the first is
+ * asked for in this version; the rest arrive with the actions that need them.
+ */
+enum class ConsentKind(
+    val key: String,
+) {
+    NOTIFICATION_ACCESS("notification_access"),
+    ACCESSIBILITY("accessibility"),
+    USAGE_ACCESS("usage_access"),
+    DEVICE_ADMIN("device_admin"),
+}
+
+/** A whole app, whichever of its activities is on the home list. Badges are counted per app. */
+@Serializable
+data class PackageRef(
+    val pkg: String,
+    val user: Long = 0,
 )
 
 @Serializable

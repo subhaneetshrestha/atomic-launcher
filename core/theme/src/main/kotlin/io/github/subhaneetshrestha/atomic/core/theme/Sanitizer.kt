@@ -18,6 +18,10 @@ internal class Sanitizer {
             renames = renames(settings.renames),
             homeInfo = homeInfo(settings.homeInfo),
             gestures = gestures(settings.gestures),
+            notifications =
+                settings.notifications.copy(
+                    perAppDisabled = packages(settings.notifications.perAppDisabled, "notifications.perAppDisabled"),
+                ),
             theme = theme(settings.theme, prefix = "theme."),
         )
 
@@ -166,6 +170,36 @@ internal class Sanitizer {
         }
     }
 
+    private fun packages(
+        refs: List<PackageRef>,
+        path: String,
+    ): List<PackageRef> {
+        val seen = HashSet<PackageRef>()
+        return refs.filterIndexed { index, ref ->
+            val at = "$path[$index]"
+            when {
+                !PACKAGE.matches(ref.pkg) -> {
+                    warnings += Warning(at, "'${ref.pkg}' is not a package name; dropped")
+                    false
+                }
+
+                ref.user < 0 -> {
+                    warnings += Warning(at, "user serial ${ref.user} is negative; dropped")
+                    false
+                }
+
+                !seen.add(ref) -> {
+                    warnings += Warning(at, "repeats an earlier entry; dropped")
+                    false
+                }
+
+                else -> {
+                    true
+                }
+            }
+        }
+    }
+
     private fun renames(renames: List<Rename>): List<Rename> {
         val seen = HashSet<Pair<String, Long>>()
         return renames.mapIndexedNotNull { index, rename ->
@@ -263,6 +297,19 @@ internal class Sanitizer {
                         ),
                     rowGapDp = clamp(layout.rowGapDp, 0, 64, "${prefix}layout.rowGapDp"),
                 ),
+            badge = badge(theme.badge, "${prefix}badge"),
+        )
+    }
+
+    private fun badge(
+        badge: Badge,
+        path: String,
+    ): Badge {
+        val defaults = Badge()
+        return badge.copy(
+            scale = clamp(badge.scale, BADGE_SCALE_MIN, BADGE_SCALE_MAX, "$path.scale"),
+            background = color(badge.background, isText = true, "$path.background") ?: defaults.background,
+            text = color(badge.text, isText = true, "$path.text") ?: defaults.text,
         )
     }
 
@@ -350,3 +397,7 @@ private val COMPONENT = Regex("^[A-Za-z][\\w.]*/[\\w.$]+$")
 
 /** A package name: no whitespace, dot-separated. */
 private val PACKAGE = Regex("^[A-Za-z][\\w.]*$")
+
+/** A badge shorter than a third of the name is a speck; one taller than the name is not a badge. */
+private const val BADGE_SCALE_MIN = 0.3f
+private const val BADGE_SCALE_MAX = 1.2f
