@@ -47,4 +47,17 @@
     <string name="crash_mail_subject">atomic crash report</string>
     <string name="support_email" translatable="false">shresthasubhaneet+atomic@gmail.com</string>
     <string name="source_url" translatable="false">https://github.com/subhaneetshrestha/atomic-launcher</string>
+
+    <!-- First run -->
+    <string name="setup_title">Welcome to atomic</string>
+    <string name="setup_apps_title">Pick the apps for your home screen</string>
+    <string name="setup_apps_summary">Up to 16, in the order you tap them. Skip to keep the first six alphabetically.</string>
+    <string name="setup_theme_title">Pick a look</string>
+    <string name="setup_default_title">Make atomic your home app</string>
+    <string name="setup_default_summary">Android asks which app answers the Home button. You can change this later in the system settings.</string>
+    <string name="setup_set_default">Set as default</string>
+    <string name="setup_is_default">atomic is your home app</string>
+    <string name="setup_skip">Skip</string>
+    <string name="setup_next">Next</string>
+    <string name="setup_done">Done</string>
 </resources>

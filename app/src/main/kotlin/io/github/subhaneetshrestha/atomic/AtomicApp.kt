@@ -36,6 +36,9 @@ class AtomicApp : Application() {
     lateinit var crashEnvironment: CrashEnvironment
         private set
 
+    /** The first-run setup is offered once per process; the persisted flag decides across processes. */
+    var setupOffered: Boolean = false
+
     override fun onCreate() {
         super.onCreate()
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0

@@ -22,6 +22,7 @@ import io.github.subhaneetshrestha.atomic.core.theme.Settings
 import io.github.subhaneetshrestha.atomic.home.info.InfoLinesView
 import io.github.subhaneetshrestha.atomic.settings.SettingsActivity
 import io.github.subhaneetshrestha.atomic.settings.SettingsRepository
+import io.github.subhaneetshrestha.atomic.setup.SetupActivity
 import io.github.subhaneetshrestha.atomic.util.Logs
 
 /**
@@ -109,6 +110,13 @@ class HomeActivity : ThemedActivity() {
             },
         )
         render()
+        offerSetup()
+    }
+
+    private fun offerSetup() {
+        if (settings.settings.app.setupDone || atomicApp.setupOffered) return
+        atomicApp.setupOffered = true
+        startActivity(Intent(this, SetupActivity::class.java))
     }
 
     override fun onStart() {
