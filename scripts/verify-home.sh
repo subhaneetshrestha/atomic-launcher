@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HARNESS_V5 — Phase 1 acceptance checks against a booted emulator or device.
+# HARNESS_V6 — Phase 1 acceptance checks against a booted emulator or device.
 #   scripts/verify-home.sh <adb serial> [--locale]
 # Installs the debug APK, makes it the default home and exercises the home skeleton the way the
 # system does (HOME intent into the home stack). --locale also switches the device to de-DE by
@@ -37,6 +37,21 @@ home_records() { sh dumpsys activity activities | grep -E '^\s*\* Hist\s+#[0-9]+
 count_log() { $ADB logcat -d -s HomeActivity:D 2>/dev/null | tr -d '\r' | grep -c "$1" || true; }
 crash_count() { $ADB logcat -d -b crash 2>/dev/null | tr -d '\r' | grep -c "$PKG" || true; }
 displayed() { $ADB logcat -d -s ActivityManager:I ActivityTaskManager:I 2>/dev/null | tr -d '\r' | grep -o 'Displayed [^ ]*HomeActivity[^+]*+[0-9a-z]*' | tail -1 | grep -o '+.*'; }
+# Phase 2 offers a first-run setup on a cleared app; these checks want the home list, so skip it.
+dismiss_setup() {
+  local b i
+  for i in 1 2 3 4 5 6; do
+    b=$(grep -oiE '<node[^>]*text="Skip"[^>]*>' <<<"$(dump)" | head -1 | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | sed -E 's/.*\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\].*/\1 \2 \3 \4/')
+    if [ -n "$b" ]; then
+      read -r x1 y1 x2 y2 <<<"$b"; sh input tap $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )) >/dev/null; wait_s 2
+      info "first-run setup skipped (attempt $i); setupDone=$(sh run-as "$PKG" cat files/settings.json 2>/dev/null | grep -o '"setupDone": [a-z]*')"
+      return 0
+    fi
+    # Not (yet) showing: the setup only appears on a cleared app, a moment after the home screen.
+    if [ "$i" -ge 3 ]; then info "no first-run setup on screen (focus: $(top_activity))"; return 0; fi
+    wait_s 1
+  done
+}
 wait_for_home() { # after a zygote restart: until the system has relaunched our home activity
   for _ in $(seq 1 60); do
     [ "$(home_records)" -ge 1 ] && [[ "$(top_activity)" == *HomeActivity* ]] && return 0
@@ -60,9 +75,13 @@ if [ "$api" -ge 29 ]; then
 else
   [ -n "$other" ] && sh cmd package set-home-activity "$other" >/dev/null 2>&1 || true
 fi
-sh input keyevent KEYCODE_BACK >/dev/null
+# Fresh state only now that another launcher is the default: clearing while we are the default
+# makes the system relaunch us at once, the first-run setup appears, and a stray key press could
+# finish it (Back on the setup counts as Skip). The checks below assume the alphabetical fallback.
+sh pm clear "$PKG" >/dev/null
 sh am force-stop "$PKG" >/dev/null; wait_s 1
 $ADB shell am start -W -n "$CMP" >/dev/null 2>&1; wait_s 2
+dismiss_setup
 grep -q "$BANNER" <<<"$(dump)" && ok "banner visible while not the default home" || ko "banner visible while not the default home (default was: $other)"
 
 if [ "$api" -ge 29 ]; then
@@ -77,6 +96,7 @@ res=$(sh cmd package resolve-activity --brief -a android.intent.action.MAIN -c a
 # places it in the home stack. `am start -n` would create a second ordinary task next to it.
 sh am force-stop "$PKG" >/dev/null; wait_s 1
 $ADB shell am start -W -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1; wait_s 2
+dismiss_setup
 info "cold start: first frame Displayed ${disp:-$(displayed)}"
 [[ "$(top_activity)" == *HomeActivity* ]] && ok "HOME intent brings HomeActivity to the front" || ko "HOME intent brings HomeActivity to the front (focus: $(top_activity))"
 

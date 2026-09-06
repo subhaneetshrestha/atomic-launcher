@@ -2,6 +2,5 @@
 <resources>
     <!-- Phase 1 follows the system day/night setting; Phase 7 replaces these with theme colors. -->
     <color name="home_background">#FFFFFFFF</color>
-    <color name="home_text">#FF111111</color>
     <color name="ic_launcher_background">#FF111111</color>
 </resources>
