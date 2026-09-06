@@ -19,6 +19,7 @@ data class Settings(
     val renames: List<Rename> = emptyList(),
     val homeInfo: HomeInfoConfig = HomeInfoConfig(),
     val gestures: GestureConfig = GestureConfig(),
+    val search: SearchConfig = SearchConfig(),
     val appearance: Appearance = Appearance(),
 ) {
     /** What this surface does: the stored binding, else what the launcher ships, else nothing. */
@@ -133,6 +134,15 @@ data class InfoLine(
     /** null means the action the line ships with; [Action.None] means the user unbound it. */
     val onTap: Action? = null,
     val onLongPress: Action? = null,
+)
+
+@Serializable
+data class SearchConfig(
+    /** With one app left matching, open it rather than waiting for a tap. */
+    val autoLaunchSingle: Boolean = true,
+    val autoShowKeyboard: Boolean = true,
+    /** Offer a web search when nothing matches. Off: the launcher makes no network calls by default. */
+    val webSearchFallback: Boolean = false,
 )
 
 @Serializable

@@ -1,6 +1,7 @@
 package io.github.subhaneetshrestha.atomic.actions
 
 import android.app.Activity
+import android.app.SearchManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -26,6 +27,11 @@ interface LauncherSurfaces {
     fun openLauncherSettings()
 
     fun chooseDefaultLauncher()
+
+    fun openSearch()
+
+    /** The same list of apps, without the keyboard in the way. */
+    fun openDrawer()
 }
 
 /**
@@ -102,6 +108,16 @@ class ActionRunner(
                 true
             }
 
+            BuiltinId.OPEN_SEARCH -> {
+                surfaces.openSearch()
+                true
+            }
+
+            BuiltinId.OPEN_DRAWER -> {
+                surfaces.openDrawer()
+                true
+            }
+
             BuiltinId.FLASHLIGHT_TOGGLE -> {
                 torch.toggle()
             }
@@ -162,6 +178,10 @@ class ActionRunner(
             false
         }
     }
+
+    /** The web search carries what was typed, so it needs its own way in. */
+    fun searchWeb(query: String): Boolean =
+        start(Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, query), BuiltinId.WEB_SEARCH)
 
     private fun start(
         intent: Intent?,

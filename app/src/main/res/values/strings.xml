@@ -156,4 +156,9 @@
     <string name="section_device">This device</string>
     <string name="section_system">Needs the accessibility service</string>
     <string name="link_not_valid">That is not a link atomic can open</string>
+
+    <!-- Search -->
+    <string name="search_hint">Search apps</string>
+    <string name="search_no_results">Nothing matches</string>
+    <string name="search_web">Search the web for \u201c%1$s\u201d</string>
 </resources>

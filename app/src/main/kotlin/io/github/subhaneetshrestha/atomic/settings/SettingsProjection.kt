@@ -36,6 +36,10 @@ fun Settings.toHomeSettings(): HomeSettings {
                 VAlign.BOTTOM -> VerticalPosition.BOTTOM
             },
         textSizeSp = theme.typography.sizes.homeSp,
+        drawerTextSizeSp = theme.typography.sizes.drawerSp,
+        autoLaunchSingle = search.autoLaunchSingle,
+        autoShowKeyboard = search.autoShowKeyboard,
+        webSearchFallback = search.webSearchFallback,
         font =
             FontSpec(
                 family = theme.typography.family,

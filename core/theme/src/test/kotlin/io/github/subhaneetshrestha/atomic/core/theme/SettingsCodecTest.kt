@@ -199,4 +199,18 @@ class SettingsCodecTest {
         }
         if (created.isNotEmpty()) fail("created from the code, review and rerun: ${created.joinToString()}")
     }
+
+    @Test
+    fun `search behaves as decided out of the box`() {
+        val search = Settings().search
+
+        assertTrue(search.autoLaunchSingle, "one match opens itself; that is the point of a two-letter search")
+        assertTrue(search.autoShowKeyboard)
+        assertEquals(false, search.webSearchFallback, "the launcher makes no network calls unless asked")
+
+        val stored = """{ "search": { "autoLaunchSingle": false } }"""
+        val loaded = assertIs<DecodeResult.Ok<Settings>>(SettingsCodec.decodeSettings(stored)).value.search
+        assertEquals(false, loaded.autoLaunchSingle)
+        assertTrue(loaded.autoShowKeyboard, "a setting the document does not mention keeps its default")
+    }
 }

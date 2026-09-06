@@ -20,6 +20,7 @@
     "italic": false,
     "sizes": {
       "homeSp": 22.0,
+      "drawerSp": 20.0,
       "clockSp": 40.0,
       "infoSp": 13.0
     }

@@ -249,6 +249,7 @@ internal class Sanitizer {
                     sizes =
                         sizes.copy(
                             homeSp = clamp(sizes.homeSp, 10f, 64f, "${prefix}typography.sizes.homeSp"),
+                            drawerSp = clamp(sizes.drawerSp, 10f, 40f, "${prefix}typography.sizes.drawerSp"),
                             clockSp = clamp(sizes.clockSp, 12f, 140f, "${prefix}typography.sizes.clockSp"),
                             infoSp = clamp(sizes.infoSp, 8f, 40f, "${prefix}typography.sizes.infoSp"),
                         ),

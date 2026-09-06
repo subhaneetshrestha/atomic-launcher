@@ -28,6 +28,11 @@ data class HomeSettings(
     val horizontalAlignment: HorizontalAlignment = HorizontalAlignment.CENTER,
     val verticalPosition: VerticalPosition = VerticalPosition.CENTER,
     val textSizeSp: Float = 24f,
+    val drawerTextSizeSp: Float = 20f,
+    /** With one match left, open it instead of waiting for a tap. */
+    val autoLaunchSingle: Boolean = true,
+    val autoShowKeyboard: Boolean = true,
+    val webSearchFallback: Boolean = false,
     val font: FontSpec = FontSpec(),
     /** Touch-target floor; rows never shrink below this even at small text sizes. */
     val rowMinHeightDp: Int = 48,

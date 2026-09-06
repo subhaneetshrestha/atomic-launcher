@@ -56,6 +56,7 @@ data class Typography(
 @Serializable
 data class TextSizes(
     val homeSp: Float = 24f,
+    val drawerSp: Float = 20f,
     val clockSp: Float = 48f,
     val infoSp: Float = 14f,
 )

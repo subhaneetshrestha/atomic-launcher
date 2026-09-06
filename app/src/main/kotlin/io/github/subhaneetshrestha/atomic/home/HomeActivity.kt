@@ -1,6 +1,7 @@
 package io.github.subhaneetshrestha.atomic.home
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
@@ -36,6 +37,8 @@ import io.github.subhaneetshrestha.atomic.gestures.GestureDispatcher
 import io.github.subhaneetshrestha.atomic.gestures.GestureEvent
 import io.github.subhaneetshrestha.atomic.gestures.Haptics
 import io.github.subhaneetshrestha.atomic.home.info.InfoLinesView
+import io.github.subhaneetshrestha.atomic.search.AppSearchIndex
+import io.github.subhaneetshrestha.atomic.search.SearchOverlay
 import io.github.subhaneetshrestha.atomic.settings.SettingsActivity
 import io.github.subhaneetshrestha.atomic.settings.SettingsRepository
 import io.github.subhaneetshrestha.atomic.setup.SetupActivity
@@ -65,6 +68,7 @@ class HomeActivity :
     private lateinit var runner: ActionRunner
     private lateinit var dispatcher: GestureDispatcher
     private lateinit var haptics: Haptics
+    private lateinit var searchOverlay: SearchOverlay
     private var infoPosition: InfoPosition? = null
     private var visibleRows: List<AppKey> = emptyList()
 
@@ -117,10 +121,17 @@ class HomeActivity :
         infoLines = InfoLinesView(this, applier).apply { onSurface = ::onSurfaceTouched }
         block = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         banner = DefaultHomeBanner(this, applier).apply { setOnClickListener { defaultHome.request(roleRequest) } }
+        searchOverlay =
+            SearchOverlay(this, applier).apply {
+                onLaunch = ::launchByKey
+                onWebSearch = { query -> if (!runner.searchWeb(query)) toast(R.string.action_no_app) }
+                onClose = { root.gesturesEnabled = true }
+            }
         root =
             HomeRootView(this).apply {
                 setBlock(block, applier.verticalGravity(settings.current.verticalPosition))
                 addFooter(banner)
+                setOverlay(searchOverlay)
                 onGesture = ::onGesture
             }
         haptics = Haptics(root)
@@ -132,7 +143,7 @@ class HomeActivity :
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    Logs.d(TAG) { "back: nothing to dismiss" }
+                    if (searchOverlay.isOpen) searchOverlay.close() else Logs.d(TAG) { "back: nothing to dismiss" }
                 }
             },
         )
@@ -161,6 +172,9 @@ class HomeActivity :
     }
 
     override fun onStop() {
+        // Leaving the launcher puts the screen back to its resting state, so coming back is never
+        // a half-finished search.
+        searchOverlay.close()
         repository.removeListener(snapshotListener)
         settings.removeDocumentListener(documentListener)
         infoLines.onStop()
@@ -176,8 +190,32 @@ class HomeActivity :
         if (isHomePress) resetToHome()
     }
 
-    /** The Home key while we are already showing: later phases dismiss overlays and scroll to top here. */
-    private fun resetToHome() = Unit
+    /** The Home key while the launcher is already showing: put the screen back to its resting state. */
+    private fun resetToHome() {
+        if (searchOverlay.isOpen) searchOverlay.close()
+    }
+
+    override fun openSearch() = showSearch(withKeyboard = true)
+
+    override fun openDrawer() = showSearch(withKeyboard = false)
+
+    private fun showSearch(withKeyboard: Boolean) {
+        // Built on the way in: the list is small, so a rename or a new app is never stale.
+        val index = AppSearchIndex.build(repository.current.entries, settings.current)
+        root.gesturesEnabled = false
+        searchOverlay.open(index, settings.current, atomicApp.resolvedColors(this), withKeyboard)
+    }
+
+    private fun launchByKey(key: AppKey) {
+        val entry = repository.current.entries.firstOrNull { it.key == key } ?: return
+        launcher.launch(entry, null)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // After a rotation the keyboard has to be asked for again.
+        searchOverlay.refreshKeyboard()
+    }
 
     private fun render() {
         val view = settings.current

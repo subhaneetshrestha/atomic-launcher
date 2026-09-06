@@ -35,6 +35,13 @@ class HomeRootView(
 ) : FrameLayout(context) {
     var onGesture: ((GestureEvent) -> Unit)? = null
 
+    /** While the search is up it owns the screen, so the home gestures stand down. */
+    var gesturesEnabled: Boolean = true
+        set(value) {
+            field = value
+            if (!value) recognizer.reset()
+        }
+
     /** Take the left and right edges from the system back gesture. The home app may; others may not. */
     var takeOverSideEdges: Boolean = false
         set(value) {
@@ -77,6 +84,11 @@ class HomeRootView(
         }
     }
 
+    /** Covers everything, above the app list and the info lines; it takes its own insets. */
+    fun setOverlay(view: View) {
+        addView(view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    }
+
     /** A full-width row below the block, e.g. the default-home banner. */
     fun addFooter(view: View) {
         content.addView(view, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
@@ -105,14 +117,14 @@ class HomeRootView(
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        watch(ev)
+        if (gesturesEnabled) watch(ev)
         return super.dispatchTouchEvent(ev)
     }
 
     /** Once the touch is a drag it belongs to the gesture, so the row under the finger is cancelled. */
-    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = recognizer.isDragging
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = gesturesEnabled && recognizer.isDragging
 
-    override fun onTouchEvent(ev: MotionEvent): Boolean = true
+    override fun onTouchEvent(ev: MotionEvent): Boolean = gesturesEnabled
 
     private fun watch(ev: MotionEvent) {
         val action =

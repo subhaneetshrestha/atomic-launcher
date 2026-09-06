@@ -23,9 +23,15 @@ object BuiltinActions {
     const val ACCESSIBILITY_LOCK_SDK = 28
 
     /**
-     * The launcher's own surfaces this version has built. Search, the drawer and the rotating
-     * background arrive with the phases that build them; the actions exist meanwhile so a backup
-     * written by a newer version keeps its bindings.
+     * The launcher's own surfaces this version has built. The rotating background arrives with the
+     * phase that builds it; its action exists meanwhile so a backup written by a newer version
+     * keeps its bindings.
      */
-    val BUILT_SURFACES: Set<BuiltinId> = setOf(BuiltinId.LAUNCHER_SETTINGS, BuiltinId.DEFAULT_LAUNCHER_CHOOSER)
+    val BUILT_SURFACES: Set<BuiltinId> =
+        setOf(
+            BuiltinId.LAUNCHER_SETTINGS,
+            BuiltinId.DEFAULT_LAUNCHER_CHOOSER,
+            BuiltinId.OPEN_SEARCH,
+            BuiltinId.OPEN_DRAWER,
+        )
 }
