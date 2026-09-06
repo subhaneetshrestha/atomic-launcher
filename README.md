@@ -2,7 +2,21 @@
 
 A text-only, minimalist Android home launcher. The home screen is a short list of app names you choose; you decide where the list sits, how big the text is, which gestures open which apps or actions, and what the background shows. A fuzzy search finds any app in two or three keystrokes. Themes are plain JSON files you can share.
 
-Status: early development (Phase 1, home skeleton). Not yet usable as a daily launcher.
+Status: early development, five of nine phases done. Usable as a launcher, but the background
+engine, shareable themes and the accessibility-powered actions are still to come, and no signed
+build has been published yet.
+
+## What works today
+
+- A home list of one to sixteen app names you choose, renamed or hidden as you like, aligned and
+  sized by the theme, with a clock, the date and the battery above it.
+- Ten gestures (four swipes, four long swipes, double tap, long press) and the two info lines, each
+  bound to any of 44 built-in actions, an app, a link or nothing.
+- A fuzzy search over app names that opens the only match by itself, and a drawer of every app.
+- Notification badges: a count beside a name, off until you turn them on, with what would be read
+  explained before Android's grant screen.
+- Four built-in themes, day/night, a skippable first-run setup, backup and restore through the
+  system file picker, and an on-device crash report you can email.
 
 ## Goals
 
@@ -21,7 +35,8 @@ git config core.hooksPath .githooks   # once per clone: ktlint formats staged Ko
 ./gradlew assembleRelease checkReleaseApkSize gmsGuard
 ./gradlew installDebug                 # on a connected device or emulator
 ./gradlew ktlintFormat                 # format everything
-scripts/verify-home.sh emulator-5554 --locale   # Phase 1 acceptance on a booted emulator
+scripts/verify-home.sh emulator-5554 --locale   # per-phase acceptance on a booted emulator
+scripts/verify-settings.sh emulator-5554        # and verify-gestures, verify-search, verify-badges
 ```
 
 Modules: `:app` (Android), `:core:theme` (settings/theme schema, pure Kotlin), `:core:search` (fuzzy matching, pure Kotlin). Application id: `io.github.subhaneetshrestha.atomic`.
