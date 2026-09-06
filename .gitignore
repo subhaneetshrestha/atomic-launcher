@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+local.properties
+
+# IDE
+.idea/
+*.iml
+captures/
+.cxx/
+
+# Signing material never enters the repo
+*.jks
+*.keystore
+*.p12
+
+# OS
+.DS_Store

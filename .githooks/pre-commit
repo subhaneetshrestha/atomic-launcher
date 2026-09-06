@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+# Formats staged Kotlin files with ktlint and re-stages them. Activated per clone with:
+#   git config core.hooksPath .githooks
+set -eu
+changed=$(git --no-pager diff --name-status --no-color --cached | awk '$1 != "D" && $NF ~ /\.kts?$/ { print $NF }')
+[ -z "$changed" ] && exit 0
+if [ ! -x ./gradlew ]; then
+  echo "pre-commit: ./gradlew missing, skipping ktlint" >&2
+  exit 0
+fi
+./gradlew --quiet ktlintFormat -PinternalKtlintGitFilter="$changed"
+printf '%s\n' "$changed" | while IFS= read -r file; do
+  [ -f "$file" ] && git add -- "$file"
+done
