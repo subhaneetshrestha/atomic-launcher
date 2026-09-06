@@ -16,11 +16,6 @@ end
 function die
     set_color -o red; echo "!! $argv"; set_color normal; exit 1
 end
-# Run a command with the android-sdk group active (group membership only
-# takes effect in new logins; `sg` gives it to us now). Env is passed explicitly.
-function as_sdk_group
-    sg android-sdk -c "env JAVA_HOME=$JDK ANDROID_HOME=$SDK ANDROID_SDK_ROOT=$SDK $argv"
-end
 
 command -q paru; or die "paru is not installed"
 
@@ -33,21 +28,25 @@ step "2/7 AUR packages: Android SDK command-line tools, platform-tools, build-to
 paru -S --needed android-sdk-cmdline-tools-latest android-sdk-platform-tools android-sdk-build-tools android-platform android-platform-36 android-emulator; or die "AUR install failed"
 test -x $SDKM; or die "sdkmanager not found at $SDKM"
 
-step "3/7 Make $SDK writable for your user (android-sdk group)"
+step "3/7 Make $SDK writable for your user"
 getent group android-sdk >/dev/null; or sudo groupadd android-sdk
 if not id -nG | string match -q android-sdk
     sudo gpasswd -a $USER android-sdk; or die "could not add $USER to android-sdk"
-    echo "Added $USER to the android-sdk group. It applies to new logins; this script uses 'sg' meanwhile."
 end
-sudo chgrp -R android-sdk $SDK
-sudo chmod -R g+w $SDK
+# Own the tree directly (user:android-sdk): group membership alone only applies to new logins.
+sudo chown -R $USER:android-sdk $SDK
+sudo chmod -R u+rwX,g+rwX $SDK
 sudo find $SDK -type d -exec chmod g+s '{}' +
 # adb access to physical devices
 getent group adbusers >/dev/null; and not id -nG | string match -q adbusers; and sudo gpasswd -a $USER adbusers
 
 step "4/7 sdkmanager: licenses, build-tools 36.0.0 (AGP 9.4 default), system images for API 26 and 36"
-as_sdk_group "sh -c 'yes | $SDKM --licenses >/dev/null'"; or die "license acceptance failed"
-as_sdk_group "$SDKM --install 'build-tools;36.0.0' 'system-images;android-26;google_apis;x86_64' 'system-images;android-36;google_apis;x86_64'"; or die "sdkmanager install failed"
+set -lx JAVA_HOME $JDK
+set -lx ANDROID_HOME $SDK
+set -lx ANDROID_SDK_ROOT $SDK
+test -w $SDK; or die "$SDK is not writable; re-run the script"
+yes | $SDKM --licenses >/dev/null; or die "license acceptance failed"
+$SDKM --install 'build-tools;36.0.0' 'system-images;android-26;google_apis;x86_64' 'system-images;android-36;google_apis;x86_64'; or die "sdkmanager install failed"
 
 step "5/7 AVDs: api26 and api36 (Pixel profile, stored in ~/.android/avd)"
 set -lx JAVA_HOME $JDK
@@ -82,6 +81,6 @@ echo "emulator:  "($SDK/emulator/emulator -version 2>/dev/null | head -1)
 echo "avds:      "($SDK/emulator/emulator -list-avds | string join ', ')
 echo "kvm:       "(test -r /dev/kvm -a -w /dev/kvm; and echo ok; or echo "NOT accessible")
 echo "installed SDK packages:"
-as_sdk_group "$SDKM --list_installed" | sed -n '/^  /p'
+$SDKM --list_installed | sed -n '/^  /p'
 echo
 set_color -o green; echo "Done. Open a new terminal (or run 'exec fish') so JAVA_HOME/ANDROID_HOME/PATH are active."; set_color normal
