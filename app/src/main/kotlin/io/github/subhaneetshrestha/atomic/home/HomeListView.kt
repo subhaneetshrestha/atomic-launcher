@@ -13,8 +13,10 @@ import io.github.subhaneetshrestha.atomic.settings.HomeSettings
  * and RecyclerView: no adapter, no nested scrolling to fight swipe gestures, zero dependencies,
  * and every row is a plain clickable, focusable view for TalkBack.
  */
-class HomeListView(context: Context, private val applier: ThemeApplier) : LinearLayout(context) {
-
+class HomeListView(
+    context: Context,
+    private val applier: ThemeApplier,
+) : LinearLayout(context) {
     var onRowClick: ((AppEntry, View) -> Unit)? = null
     var onRowLongClick: ((AppEntry, View) -> Boolean)? = null
 
@@ -22,7 +24,10 @@ class HomeListView(context: Context, private val applier: ThemeApplier) : Linear
         orientation = VERTICAL
     }
 
-    fun render(rows: List<HomeRow>, settings: HomeSettings) {
+    fun render(
+        rows: List<HomeRow>,
+        settings: HomeSettings,
+    ) {
         gravity = applier.horizontalGravity(settings.horizontalAlignment)
         val horizontal = applier.dp(settings.horizontalPaddingDp)
         val vertical = applier.dp(settings.verticalPaddingDp)
@@ -43,15 +48,22 @@ class HomeListView(context: Context, private val applier: ThemeApplier) : Linear
         requestLayout()
     }
 
-    private fun newRow(): TextView = TextView(context).apply {
-        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-        setSingleLine(true)
-        ellipsize = TextUtils.TruncateAt.END
-        isClickable = true
-        isFocusable = true
-        setOnClickListener { view -> (view.tag as? AppEntry)?.let { onRowClick?.invoke(it, view) } }
-        setOnLongClickListener { view -> (view.tag as? AppEntry)?.let { onRowLongClick?.invoke(it, view) } ?: false }
-    }
+    private fun newRow(): TextView =
+        TextView(context).apply {
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            setSingleLine(true)
+            ellipsize = TextUtils.TruncateAt.END
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { view ->
+                val entry = view.tag as? AppEntry ?: return@setOnClickListener
+                onRowClick?.invoke(entry, view)
+            }
+            setOnLongClickListener { view ->
+                val entry = view.tag as? AppEntry ?: return@setOnLongClickListener false
+                onRowLongClick?.invoke(entry, view) ?: false
+            }
+        }
 
     private companion object {
         const val SUSPENDED_ALPHA = 0.5f

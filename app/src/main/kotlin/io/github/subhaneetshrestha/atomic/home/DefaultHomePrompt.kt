@@ -12,15 +12,17 @@ import androidx.annotation.RequiresApi
 import io.github.subhaneetshrestha.atomic.util.Logs
 
 /** Knows whether we hold the home role and opens the system UI that grants it. */
-class DefaultHomePrompt(private val activity: Activity) {
-
-    fun isDefaultHome(): Boolean = try {
-        val byRole = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) heldByRole() else null
-        byRole ?: resolvesToUs()
-    } catch (e: RuntimeException) {
-        Logs.w(TAG, "default-home check failed; assuming default to avoid nagging", e)
-        true
-    }
+class DefaultHomePrompt(
+    private val activity: Activity,
+) {
+    fun isDefaultHome(): Boolean =
+        try {
+            val byRole = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) heldByRole() else null
+            byRole ?: resolvesToUs()
+        } catch (e: RuntimeException) {
+            Logs.w(TAG, "default-home check failed; assuming default to avoid nagging", e)
+            true
+        }
 
     /** Role request dialog on API 29+ (result delivered through [roleLauncher]); Home settings otherwise. */
     fun request(roleLauncher: ActivityResultLauncher<Intent>) {
@@ -64,10 +66,11 @@ class DefaultHomePrompt(private val activity: Activity) {
 
     private companion object {
         const val TAG = "DefaultHomePrompt"
-        val SETTINGS_FALLBACKS = listOf(
-            Settings.ACTION_HOME_SETTINGS,
-            Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS,
-            Settings.ACTION_SETTINGS,
-        )
+        val SETTINGS_FALLBACKS =
+            listOf(
+                Settings.ACTION_HOME_SETTINGS,
+                Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS,
+                Settings.ACTION_SETTINGS,
+            )
     }
 }

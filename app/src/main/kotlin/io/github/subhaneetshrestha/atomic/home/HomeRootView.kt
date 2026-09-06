@@ -12,8 +12,9 @@ import androidx.core.view.WindowInsetsCompat
  * edge to edge behind everything; [content] takes the system-bar and display-cutout insets.
  * Insets are returned unconsumed so a later search overlay can react to the IME itself.
  */
-class HomeRootView(context: Context) : FrameLayout(context) {
-
+class HomeRootView(
+    context: Context,
+) : FrameLayout(context) {
     private val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     private val listHost = FrameLayout(context)
 
@@ -27,7 +28,10 @@ class HomeRootView(context: Context) : FrameLayout(context) {
         }
     }
 
-    fun setList(list: View, verticalGravity: Int) {
+    fun setList(
+        list: View,
+        verticalGravity: Int,
+    ) {
         listHost.removeAllViews()
         listHost.addView(list, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, verticalGravity))
     }

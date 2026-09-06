@@ -14,6 +14,9 @@ val releaseKeystore = providers.environmentVariable("ATOMIC_KEYSTORE")
 android {
     namespace = "io.github.subhaneetshrestha.atomic"
     compileSdk = 37
+    // AGP 9.4 defaults to build-tools 36.0.0; the AUR ships 37.0.0. Any version at or above the
+    // default works, and pinning it avoids an SDK download during the build.
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId = "io.github.subhaneetshrestha.atomic"
@@ -78,8 +81,6 @@ android {
     lint {
         abortOnError = true
         warningsAsErrors = false
-        htmlReport = true
-        textReport = true
     }
 
     testOptions {
@@ -123,11 +124,15 @@ abstract class CheckApkSizeTask : DefaultTask() {
 
     @TaskAction
     fun check() {
-        val artifacts = builtArtifactsLoader.get().load(apkDirectory.get())
-            ?: throw GradleException("No built APKs found in ${apkDirectory.get().asFile}")
+        val artifacts =
+            builtArtifactsLoader.get().load(apkDirectory.get())
+                ?: throw GradleException("No built APKs found in ${apkDirectory.get().asFile}")
         val sizes = artifacts.elements.map { File(it.outputFile) }.associateWith { it.length() }
         val lines = sizes.map { (file, size) -> "%s\t%d bytes\t%.3f MiB".format(file.name, size, size / 1_048_576.0) }
-        report.get().asFile.apply { parentFile.mkdirs(); writeText(lines.joinToString("\n") + "\n") }
+        report.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText(lines.joinToString("\n") + "\n")
+        }
         lines.forEach { logger.lifecycle("APK size: $it") }
         val largest = sizes.values.maxOrNull() ?: 0L
         if (largest > maxBytes.get()) {
@@ -150,6 +155,7 @@ abstract class GmsGuardTask : DefaultTask() {
     @TaskAction
     fun check() {
         val seen = LinkedHashSet<String>()
+
         fun walk(component: ResolvedComponentResult) {
             if (!seen.add(component.id.displayName)) return
             component.dependencies.filterIsInstance<ResolvedDependencyResult>().forEach { walk(it.selected) }
@@ -159,7 +165,9 @@ abstract class GmsGuardTask : DefaultTask() {
         if (offenders.isNotEmpty()) {
             throw GradleException("GMS-free build violated by: ${offenders.joinToString()}")
         }
-        logger.lifecycle("gmsGuard: ${seen.size} components on the release runtime classpath, none from GMS/Firebase/Play")
+        logger.lifecycle(
+            "gmsGuard: ${seen.size} components on the release runtime classpath, none from GMS/Firebase/Play",
+        )
     }
 }
 

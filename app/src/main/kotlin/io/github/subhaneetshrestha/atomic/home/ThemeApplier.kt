@@ -18,10 +18,16 @@ import kotlin.math.roundToInt
  * from fontScale, so Android 14's non-linear font scaling stays correct. Later phases grow this
  * class into the full theme applier (legibility, badges, system bars, user fonts).
  */
-class ThemeApplier(private val context: Context) {
-
+class ThemeApplier(
+    private val context: Context,
+) {
     fun dp(value: Int): Int =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), context.resources.displayMetrics).roundToInt()
+        TypedValue
+            .applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                value.toFloat(),
+                context.resources.displayMetrics,
+            ).roundToInt()
 
     fun typeface(font: FontSpec): Typeface {
         val family = Typeface.create(font.family, Typeface.NORMAL)
@@ -42,19 +48,24 @@ class ThemeApplier(private val context: Context) {
         }
     }
 
-    fun horizontalGravity(alignment: HorizontalAlignment): Int = when (alignment) {
-        HorizontalAlignment.START -> Gravity.START
-        HorizontalAlignment.CENTER -> Gravity.CENTER_HORIZONTAL
-        HorizontalAlignment.END -> Gravity.END
-    }
+    fun horizontalGravity(alignment: HorizontalAlignment): Int =
+        when (alignment) {
+            HorizontalAlignment.START -> Gravity.START
+            HorizontalAlignment.CENTER -> Gravity.CENTER_HORIZONTAL
+            HorizontalAlignment.END -> Gravity.END
+        }
 
-    fun verticalGravity(position: VerticalPosition): Int = when (position) {
-        VerticalPosition.TOP -> Gravity.TOP
-        VerticalPosition.CENTER -> Gravity.CENTER_VERTICAL
-        VerticalPosition.BOTTOM -> Gravity.BOTTOM
-    }
+    fun verticalGravity(position: VerticalPosition): Int =
+        when (position) {
+            VerticalPosition.TOP -> Gravity.TOP
+            VerticalPosition.CENTER -> Gravity.CENTER_VERTICAL
+            VerticalPosition.BOTTOM -> Gravity.BOTTOM
+        }
 
-    fun applyRow(row: TextView, settings: HomeSettings) {
+    fun applyRow(
+        row: TextView,
+        settings: HomeSettings,
+    ) {
         row.typeface = typeface(settings.font)
         row.setTextSize(TypedValue.COMPLEX_UNIT_SP, settings.textSizeSp)
         row.setTextColor(context.getColor(R.color.home_text))

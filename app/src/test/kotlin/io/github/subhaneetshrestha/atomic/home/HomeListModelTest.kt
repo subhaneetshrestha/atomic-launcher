@@ -7,17 +7,20 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class HomeListModelTest {
-
     private fun key(pkg: String) = AppKey(pkg, "$pkg.Main", 0L)
 
-    private fun entry(pkg: String, label: String) = AppEntry(key(pkg), label)
+    private fun entry(
+        pkg: String,
+        label: String,
+    ) = AppEntry(key(pkg), label)
 
-    private val alphabetical = listOf(
-        entry("a.calc", "Calculator"),
-        entry("b.cam", "Camera"),
-        entry("c.maps", "Maps"),
-        entry("d.msg", "Messages"),
-    )
+    private val alphabetical =
+        listOf(
+            entry("a.calc", "Calculator"),
+            entry("b.cam", "Camera"),
+            entry("c.maps", "Maps"),
+            entry("d.msg", "Messages"),
+        )
 
     @Test
     fun `configured apps keep their order and missing ones are dropped`() {

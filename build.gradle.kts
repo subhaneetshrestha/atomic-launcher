@@ -10,10 +10,13 @@ plugins {
 
 // ktlint on every module: `./gradlew ktlintCheck` in CI and the pre-commit hook,
 // `./gradlew ktlintFormat` locally. Style comes from .editorconfig (ktlint_official).
+// The catalog accessor only exists on the root project, so read the version here.
+val ktlintVersion = libs.versions.ktlint.get()
+
 subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
     extensions.configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
-        version.set(libs.versions.ktlint.get())
+        version.set(ktlintVersion)
         android.set(false)
         outputToConsole.set(true)
         filter {

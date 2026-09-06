@@ -11,19 +11,26 @@ import io.github.subhaneetshrestha.atomic.R
 import io.github.subhaneetshrestha.atomic.util.Logs
 
 /** Launches apps through LauncherApps in the entry's own profile. A failed launch never crashes Home. */
-class AppLauncher(private val context: Context, private val repository: AppRepository) {
-
+class AppLauncher(
+    private val context: Context,
+    private val repository: AppRepository,
+) {
     private val launcherApps: LauncherApps = context.getSystemService(LauncherApps::class.java)
 
-    fun launch(entry: AppEntry, sourceView: View?) {
+    fun launch(
+        entry: AppEntry,
+        sourceView: View?,
+    ) {
         val component = ComponentName(entry.key.packageName, entry.key.activityName)
         val bounds = sourceView?.let { view -> Rect().takeIf { view.getGlobalVisibleRect(it) } }
-        val options = sourceView?.let { view ->
-            ActivityOptions.makeClipRevealAnimation(view, 0, 0, view.width, view.height).toBundle()
-        }
+        val options =
+            sourceView?.let { view ->
+                ActivityOptions.makeClipRevealAnimation(view, 0, 0, view.width, view.height).toBundle()
+            }
         try {
-            val user = repository.userFor(entry.key.userSerial)
-                ?: throw IllegalStateException("unknown user serial ${entry.key.userSerial}")
+            val user =
+                repository.userFor(entry.key.userSerial)
+                    ?: throw IllegalStateException("unknown user serial ${entry.key.userSerial}")
             launcherApps.startMainActivity(component, user, bounds, options)
         } catch (e: RuntimeException) {
             // ActivityNotFoundException, SecurityException, IllegalStateException: the app may have

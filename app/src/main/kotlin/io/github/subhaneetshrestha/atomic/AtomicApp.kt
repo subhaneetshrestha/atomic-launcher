@@ -11,7 +11,6 @@ import io.github.subhaneetshrestha.atomic.util.Logs
 
 /** Process singletons. Keeps onCreate to a few milliseconds: the home app starts at every boot. */
 class AtomicApp : Application() {
-
     lateinit var appRepository: AppRepository
         private set
 
@@ -30,9 +29,16 @@ class AtomicApp : Application() {
 
     /** Debug builds only: surfaces main-thread I/O, leaks and hidden-API use in logcat. */
     private fun installStrictMode() {
-        StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build())
+        StrictMode.setThreadPolicy(
+            StrictMode.ThreadPolicy
+                .Builder()
+                .detectAll()
+                .penaltyLog()
+                .build(),
+        )
         StrictMode.setVmPolicy(
-            StrictMode.VmPolicy.Builder()
+            StrictMode.VmPolicy
+                .Builder()
                 .detectLeakedClosableObjects()
                 .detectActivityLeaks()
                 .apply { if (Build.VERSION.SDK_INT >= 28) detectNonSdkApiUsage() }

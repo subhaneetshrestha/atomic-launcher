@@ -7,7 +7,10 @@ import android.widget.TextView
 import io.github.subhaneetshrestha.atomic.R
 
 /** One quiet line at the bottom of the screen, shown only while we are not the default home app. */
-class DefaultHomeBanner(context: Context, applier: ThemeApplier) : TextView(context) {
+class DefaultHomeBanner(
+    context: Context,
+    applier: ThemeApplier,
+) : TextView(context) {
     init {
         setText(R.string.default_home_banner)
         gravity = Gravity.CENTER

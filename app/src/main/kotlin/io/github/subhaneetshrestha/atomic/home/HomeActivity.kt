@@ -23,7 +23,6 @@ import io.github.subhaneetshrestha.atomic.util.Logs
  * onNewIntent while an instance exists.
  */
 class HomeActivity : ComponentActivity() {
-
     private val app: AtomicApp get() = application as AtomicApp
     private val repository: AppRepository get() = app.appRepository
     private val settings: SettingsSource get() = app.settingsSource
@@ -35,9 +34,10 @@ class HomeActivity : ComponentActivity() {
     private lateinit var launcher: AppLauncher
     private lateinit var defaultHome: DefaultHomePrompt
 
-    private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        refreshBanner()
-    }
+    private val roleRequest =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            refreshBanner()
+        }
     private val snapshotListener = AppRepository.Listener { render() }
     private val settingsListener = SettingsSource.Listener { render() }
 
@@ -51,11 +51,12 @@ class HomeActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= 28) {
             // Draw into the cutout area on every API level, matching the target-35+ enforcement.
             val params = window.attributes
-            params.layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= 30) {
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-            } else {
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
+            params.layoutInDisplayCutoutMode =
+                if (Build.VERSION.SDK_INT >= 30) {
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                } else {
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
             window.attributes = params
         }
 
@@ -63,25 +64,31 @@ class HomeActivity : ComponentActivity() {
         launcher = AppLauncher(this, repository)
         defaultHome = DefaultHomePrompt(this)
 
-        list = HomeListView(this, applier).apply {
-            onRowClick = { entry, view -> launcher.launch(entry, view) }
-        }
-        banner = DefaultHomeBanner(this, applier).apply {
-            setOnClickListener { defaultHome.request(roleRequest) }
-        }
-        root = HomeRootView(this).apply {
-            setList(list, applier.verticalGravity(settings.current.verticalPosition))
-            addFooter(banner)
-        }
+        list =
+            HomeListView(this, applier).apply {
+                onRowClick = { entry, view -> launcher.launch(entry, view) }
+            }
+        banner =
+            DefaultHomeBanner(this, applier).apply {
+                setOnClickListener { defaultHome.request(roleRequest) }
+            }
+        root =
+            HomeRootView(this).apply {
+                setList(list, applier.verticalGravity(settings.current.verticalPosition))
+                addFooter(banner)
+            }
         setContentView(root)
 
         // Always enabled: Back dismisses overlays (none yet) and otherwise does nothing. This keeps
         // an OnBackInvokedCallback registered on API 33+, so Back can never finish the home task.
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                Logs.d(TAG) { "back: nothing to dismiss" }
-            }
-        })
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    Logs.d(TAG) { "back: nothing to dismiss" }
+                }
+            },
+        )
         render()
     }
 

@@ -14,7 +14,9 @@ interface SettingsSource {
 }
 
 /** Phase 1: constants only, never changes. Replaced by the JSON-backed store in Phase 2. */
-class DefaultSettingsSource(override val current: HomeSettings = HomeSettings()) : SettingsSource {
+class DefaultSettingsSource(
+    override val current: HomeSettings = HomeSettings(),
+) : SettingsSource {
     override fun addListener(listener: SettingsSource.Listener) = Unit
 
     override fun removeListener(listener: SettingsSource.Listener) = Unit

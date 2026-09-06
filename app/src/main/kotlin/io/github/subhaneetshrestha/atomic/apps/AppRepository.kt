@@ -30,7 +30,11 @@ class AppRepository(
     private val profileSource: ProfileSource = ProfileSource.CurrentUserOnly,
 ) {
     /** Immutable view of the launchable apps. [loaded] is false until the first enumeration finishes. */
-    class Snapshot(val entries: List<AppEntry>, val generation: Long, val loaded: Boolean) {
+    class Snapshot(
+        val entries: List<AppEntry>,
+        val generation: Long,
+        val loaded: Boolean,
+    ) {
         companion object {
             val EMPTY = Snapshot(emptyList(), 0L, loaded = false)
         }
@@ -97,83 +101,131 @@ class AppRepository(
         for (user in profileSource.profiles()) {
             val serial = serialOf(user) ?: continue
             users[serial] = user
-            val infos = try {
-                launcherApps.getActivityList(null, user)
-            } catch (e: RuntimeException) {
-                Logs.w(TAG, "getActivityList failed for user $serial", e)
-                emptyList()
-            }
+            val infos =
+                try {
+                    launcherApps.getActivityList(null, user)
+                } catch (e: RuntimeException) {
+                    Logs.w(TAG, "getActivityList failed for user $serial", e)
+                    emptyList()
+                }
             infos.mapNotNullTo(entries) { toEntry(it, serial) }
         }
         publish(entries)
     }
 
-    private fun reloadPackage(packageName: String, user: UserHandle) {
+    private fun reloadPackage(
+        packageName: String,
+        user: UserHandle,
+    ) {
         val serial = serialOf(user) ?: return
         users[serial] = user
-        val fresh = try {
-            launcherApps.getActivityList(packageName, user)
-        } catch (e: RuntimeException) {
-            Logs.w(TAG, "getActivityList failed for $packageName", e)
-            emptyList()
-        }.mapNotNull { toEntry(it, serial) }
+        val fresh =
+            try {
+                launcherApps.getActivityList(packageName, user)
+            } catch (e: RuntimeException) {
+                Logs.w(TAG, "getActivityList failed for $packageName", e)
+                emptyList()
+            }.mapNotNull { toEntry(it, serial) }
         val kept = current.entries.filterNot { it.key.packageName == packageName && it.key.userSerial == serial }
         publish(kept + fresh)
     }
 
-    private fun removePackage(packageName: String, user: UserHandle) {
+    private fun removePackage(
+        packageName: String,
+        user: UserHandle,
+    ) {
         val serial = serialOf(user) ?: return
         publish(current.entries.filterNot { it.key.packageName == packageName && it.key.userSerial == serial })
     }
 
-    private fun toEntry(info: LauncherActivityInfo, serial: Long): AppEntry? {
+    private fun toEntry(
+        info: LauncherActivityInfo,
+        serial: Long,
+    ): AppEntry? {
         val component = info.componentName
         if (component.packageName == appContext.packageName) return null
         // Synthesized rows for apps without a launcher activity ("app details" entries).
         if (component.className == APP_DETAILS_ACTIVITY) return null
-        val label = info.label?.toString()?.trim().orEmpty().ifEmpty { component.packageName }
+        val label =
+            info.label
+                ?.toString()
+                ?.trim()
+                .orEmpty()
+                .ifEmpty { component.packageName }
         val suspended = (info.applicationInfo.flags and ApplicationInfo.FLAG_SUSPENDED) != 0
         return AppEntry(AppKey(component.packageName, component.className, serial), label, suspended)
     }
 
     private fun publish(entries: List<AppEntry>) {
         val collator = Collator.getInstance(Locale.getDefault())
-        val sorted = entries.sortedWith(
-            Comparator<AppEntry> { a, b -> collator.compare(a.label, b.label) }
-                .thenBy { it.key.packageName }
-                .thenBy { it.key.activityName }
-                .thenBy { it.key.userSerial },
-        )
-        lastLocales = appContext.resources.configuration.locales.toLanguageTags()
+        val sorted =
+            entries.sortedWith(
+                Comparator<AppEntry> { a, b -> collator.compare(a.label, b.label) }
+                    .thenBy { it.key.packageName }
+                    .thenBy { it.key.activityName }
+                    .thenBy { it.key.userSerial },
+            )
+        lastLocales =
+            appContext.resources.configuration.locales
+                .toLanguageTags()
         val next = Snapshot(sorted, current.generation + 1, loaded = true)
         current = next
         Logs.d(TAG) { "snapshot #${next.generation}: ${sorted.size} apps" }
         Threads.main.post { for (listener in listeners) listener.onSnapshot(next) }
     }
 
-    private fun serialOf(user: UserHandle): Long? =
-        userManager.getSerialNumberForUser(user).takeIf { it >= 0 }
+    private fun serialOf(user: UserHandle): Long? = userManager.getSerialNumberForUser(user).takeIf { it >= 0 }
 
-    private val callback = object : LauncherApps.Callback() {
-        override fun onPackageRemoved(packageName: String, user: UserHandle) = removePackage(packageName, user)
-        override fun onPackageAdded(packageName: String, user: UserHandle) = reloadPackage(packageName, user)
-        override fun onPackageChanged(packageName: String, user: UserHandle) = reloadPackage(packageName, user)
-        override fun onPackagesAvailable(packageNames: Array<String>, user: UserHandle, replacing: Boolean) =
-            packageNames.forEach { reloadPackage(it, user) }
-        override fun onPackagesUnavailable(packageNames: Array<String>, user: UserHandle, replacing: Boolean) =
-            packageNames.forEach { removePackage(it, user) }
-        override fun onPackagesSuspended(packageNames: Array<String>, user: UserHandle) =
-            packageNames.forEach { reloadPackage(it, user) }
-        override fun onPackagesUnsuspended(packageNames: Array<String>, user: UserHandle) =
-            packageNames.forEach { reloadPackage(it, user) }
-    }
+    private val callback =
+        object : LauncherApps.Callback() {
+            override fun onPackageRemoved(
+                packageName: String,
+                user: UserHandle,
+            ) = removePackage(packageName, user)
 
-    private val localeReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            Logs.d(TAG) { "locale changed" }
-            refresh()
+            override fun onPackageAdded(
+                packageName: String,
+                user: UserHandle,
+            ) = reloadPackage(packageName, user)
+
+            override fun onPackageChanged(
+                packageName: String,
+                user: UserHandle,
+            ) = reloadPackage(packageName, user)
+
+            override fun onPackagesAvailable(
+                packageNames: Array<String>,
+                user: UserHandle,
+                replacing: Boolean,
+            ) = packageNames.forEach { reloadPackage(it, user) }
+
+            override fun onPackagesUnavailable(
+                packageNames: Array<String>,
+                user: UserHandle,
+                replacing: Boolean,
+            ) = packageNames.forEach { removePackage(it, user) }
+
+            override fun onPackagesSuspended(
+                packageNames: Array<String>,
+                user: UserHandle,
+            ) = packageNames.forEach { reloadPackage(it, user) }
+
+            override fun onPackagesUnsuspended(
+                packageNames: Array<String>,
+                user: UserHandle,
+            ) = packageNames.forEach { reloadPackage(it, user) }
         }
-    }
+
+    private val localeReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context,
+                intent: Intent,
+            ) {
+                Logs.d(TAG) { "locale changed" }
+                refresh()
+            }
+        }
 
     private companion object {
         const val TAG = "AppRepository"

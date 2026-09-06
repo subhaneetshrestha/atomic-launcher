@@ -7,9 +7,11 @@ import kotlin.test.assertEquals
 
 /** Proves the serialization compiler plugin and the JUnit Platform are wired for this module. */
 class ModuleWiringTest {
-
     @Serializable
-    private data class Probe(val name: String, val size: Int = 1)
+    private data class Probe(
+        val name: String,
+        val size: Int = 1,
+    )
 
     @Test
     fun `serializable classes round-trip and tolerate unknown keys`() {
