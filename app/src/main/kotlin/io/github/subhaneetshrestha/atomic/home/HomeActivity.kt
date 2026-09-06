@@ -13,6 +13,8 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import io.github.subhaneetshrestha.atomic.ThemedActivity
+import io.github.subhaneetshrestha.atomic.apps.AppActions
+import io.github.subhaneetshrestha.atomic.apps.AppKey
 import io.github.subhaneetshrestha.atomic.apps.AppLauncher
 import io.github.subhaneetshrestha.atomic.apps.AppRepository
 import io.github.subhaneetshrestha.atomic.core.theme.InfoPosition
@@ -38,7 +40,9 @@ class HomeActivity : ThemedActivity() {
     private lateinit var banner: DefaultHomeBanner
     private lateinit var launcher: AppLauncher
     private lateinit var defaultHome: DefaultHomePrompt
+    private lateinit var appMenu: AppMenu
     private var infoPosition: InfoPosition? = null
+    private var visibleRows: List<AppKey> = emptyList()
 
     private val roleRequest =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshBanner() }
@@ -70,7 +74,15 @@ class HomeActivity : ThemedActivity() {
         launcher = AppLauncher(this, repository)
         defaultHome = DefaultHomePrompt(this)
 
-        list = HomeListView(this, applier).apply { onRowClick = { entry, view -> launcher.launch(entry, view) } }
+        appMenu = AppMenu(this, settings, AppActions(this, repository))
+        list =
+            HomeListView(this, applier).apply {
+                onRowClick = { entry, view -> launcher.launch(entry, view) }
+                onRowLongClick = { entry, view ->
+                    appMenu.show(entry, view, visibleRows)
+                    true
+                }
+            }
         infoLines = InfoLinesView(this, applier)
         block = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         banner = DefaultHomeBanner(this, applier).apply { setOnClickListener { defaultHome.request(roleRequest) } }
@@ -141,7 +153,9 @@ class HomeActivity : ThemedActivity() {
         val h = applier.dp(view.horizontalPaddingDp)
         val v = applier.dp(view.verticalPaddingDp)
         block.setPadding(h, v, h, v)
-        list.render(HomeListModel.build(repository.current.entries, view), view, colors)
+        val rows = HomeListModel.build(repository.current.entries, view)
+        visibleRows = rows.map { it.entry.key }
+        list.render(rows, view, colors)
         infoLines.bind(document.homeInfo, document.theme, view, colors)
         banner.applyColors(colors)
         root.positionBlock(applier.verticalGravity(view.verticalPosition))

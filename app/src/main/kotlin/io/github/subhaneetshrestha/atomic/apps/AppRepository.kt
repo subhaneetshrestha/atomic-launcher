@@ -152,8 +152,10 @@ class AppRepository(
                 ?.trim()
                 .orEmpty()
                 .ifEmpty { component.packageName }
-        val suspended = (info.applicationInfo.flags and ApplicationInfo.FLAG_SUSPENDED) != 0
-        return AppEntry(AppKey(component.packageName, component.className, serial), label, suspended)
+        val flags = info.applicationInfo.flags
+        val suspended = (flags and ApplicationInfo.FLAG_SUSPENDED) != 0
+        val system = (flags and ApplicationInfo.FLAG_SYSTEM) != 0
+        return AppEntry(AppKey(component.packageName, component.className, serial), label, suspended, system)
     }
 
     private fun publish(entries: List<AppEntry>) {

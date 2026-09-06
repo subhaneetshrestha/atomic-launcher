@@ -1,6 +1,7 @@
 package io.github.subhaneetshrestha.atomic.settings
 
 import io.github.subhaneetshrestha.atomic.apps.AppKey
+import io.github.subhaneetshrestha.atomic.core.theme.AppRef
 import io.github.subhaneetshrestha.atomic.core.theme.HAlign
 import io.github.subhaneetshrestha.atomic.core.theme.Settings
 import io.github.subhaneetshrestha.atomic.core.theme.VAlign
@@ -46,3 +47,6 @@ fun Settings.toHomeSettings(): HomeSettings {
         verticalPaddingDp = theme.layout.paddingDp.v,
     )
 }
+
+/** The persisted form of an app identity: flattened component plus user serial. */
+fun AppKey.toRef(): AppRef = AppRef(flattenedComponent, userSerial)

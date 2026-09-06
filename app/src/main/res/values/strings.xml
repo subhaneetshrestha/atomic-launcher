@@ -4,4 +4,13 @@
     <string name="default_home_banner">Set atomic as your home app</string>
     <string name="launch_failed">Could not open %1$s</string>
     <string name="settings_title">Settings</string>
+    <string name="menu_remove_from_home">Remove from home</string>
+    <string name="menu_add_to_home">Add to home</string>
+    <string name="menu_rename">Rename</string>
+    <string name="menu_rename_reset">Use original name</string>
+    <string name="menu_hide">Hide from search</string>
+    <string name="menu_unhide">Show in search</string>
+    <string name="menu_app_info">App info</string>
+    <string name="menu_uninstall">Uninstall</string>
+    <string name="action_unavailable">Not available on this device</string>
 </resources>

@@ -14,6 +14,9 @@
         </intent>
     </queries>
 
+    <!-- Uninstall through the system dialog from the app menu (normal permission). -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
     <application
         android:name=".AtomicApp"
         android:allowBackup="true"

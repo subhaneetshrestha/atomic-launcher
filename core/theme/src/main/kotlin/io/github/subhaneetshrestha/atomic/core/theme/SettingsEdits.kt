@@ -2,6 +2,19 @@ package io.github.subhaneetshrestha.atomic.core.theme
 
 /** Pure edits the settings screens and the app menu apply through SettingsStore.update. */
 object SettingsEdits {
+    /**
+     * Before the first edit, an empty home list means "the first apps alphabetically". Editing must
+     * not silently replace those rows with just the edited one, so they become explicit entries first.
+     */
+    fun materializeHome(
+        settings: Settings,
+        visible: List<AppRef>,
+    ): Settings {
+        if (settings.home.entries.isNotEmpty()) return settings
+        val entries = visible.take(HomeLimits.MAX_ROWS).map { HomeEntry(it.component, it.user) }
+        return settings.copy(home = settings.home.copy(entries = entries))
+    }
+
     /** Appends [ref] to the home list unless it is already there or the list is full. */
     fun addToHome(
         settings: Settings,

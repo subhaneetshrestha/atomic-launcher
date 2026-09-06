@@ -75,4 +75,19 @@ class SettingsEditsTest {
         assertFalse(SettingsEdits.isHidden(shown, a))
         assertEquals(onHome, shown)
     }
+
+    @Test
+    fun `an unconfigured home list is materialised from the visible rows before the first edit`() {
+        val visible = listOf(a, b, AppRef("com.c/.Main"))
+
+        val explicit = SettingsEdits.materializeHome(Settings(), visible)
+        assertEquals(visible.map { it.component }, explicit.home.entries.map { it.component })
+
+        val configured = SettingsEdits.addToHome(Settings(), a)
+        assertEquals(
+            configured,
+            SettingsEdits.materializeHome(configured, visible),
+            "an already configured list is left alone",
+        )
+    }
 }
