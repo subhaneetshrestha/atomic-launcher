@@ -48,7 +48,9 @@ top() {
   [ -z "$a" ] && a=$(sh dumpsys activity activities | grep -m1 -o 'mResumedActivity: ActivityRecord{[^}]*}')
   sed -E 's/.* u0 ([^ }]+).*/\1/' <<<"$a"
 }
-home() { sh am start -W -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1; wait_s 2; }
+# Without -W: on older Android, waiting for a launch whose activity is already resumed can block
+# for a minute at a time.
+home() { sh am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1; wait_s 2; }
 crashes() { $ADB logcat -d -b crash 2>/dev/null | tr -d '\r' | grep -c "$PKG" || true; }
 # A swipe the recogniser will see: adb sends intermediate moves over the duration given.
 swipe() { sh input swipe "$1" "$2" "$3" "$4" "${5:-250}" >/dev/null; wait_s 3; }
