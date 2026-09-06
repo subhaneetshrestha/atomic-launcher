@@ -33,12 +33,16 @@ class AtomicApp : Application() {
     lateinit var crashRecorder: CrashRecorder
         private set
 
+    lateinit var crashEnvironment: CrashEnvironment
+        private set
+
     override fun onCreate() {
         super.onCreate()
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         Logs.enabled = debuggable
         if (debuggable) installStrictMode()
-        crashRecorder = CrashRecorder(filesDir, { Instant.now() }, crashEnvironment()).also { it.install() }
+        crashEnvironment = crashEnvironment()
+        crashRecorder = CrashRecorder(filesDir, { Instant.now() }, crashEnvironment).also { it.install() }
         // One small file, read once, so the home screen never shows a loading state.
         val policy = StrictMode.allowThreadDiskReads()
         try {
@@ -47,6 +51,10 @@ class AtomicApp : Application() {
             StrictMode.setThreadPolicy(policy)
         }
         themeResolver = ThemeResolver(TokenColors(this))
+        val versionCode = crashEnvironment.versionCode
+        if (settingsRepository.settings.app.lastVersionCode != versionCode) {
+            settingsRepository.update { it.copy(app = it.app.copy(lastVersionCode = versionCode)) }
+        }
         // A later phase skips all of this when running in the accessibility service's own process.
         appRepository = AppRepository(this).also { it.start() }
     }

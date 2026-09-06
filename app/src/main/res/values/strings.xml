@@ -13,4 +13,38 @@
     <string name="menu_app_info">App info</string>
     <string name="menu_uninstall">Uninstall</string>
     <string name="action_unavailable">Not available on this device</string>
+
+    <!-- Settings -->
+    <string name="settings_home_apps">Home apps</string>
+    <string name="settings_hidden_apps">Hidden apps</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_backup">Backup</string>
+    <string name="settings_about">About</string>
+    <string name="home_apps_summary">%1$d of %2$d on the home screen. Tap to add or remove, hold to reorder.</string>
+    <string name="hidden_apps_summary">Hidden apps stay out of search and the alphabetical list. Tap to toggle.</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
+    <string name="night_system">Follow the system</string>
+    <string name="night_light">Light</string>
+    <string name="night_dark">Dark</string>
+    <string name="backup_export">Export settings…</string>
+    <string name="backup_import">Import settings…</string>
+    <string name="backup_summary">The whole settings file, including the theme, as JSON.</string>
+    <string name="backup_exported">Settings exported</string>
+    <string name="backup_imported">Settings imported</string>
+    <string name="backup_imported_with_warnings">Settings imported, %1$d values corrected</string>
+    <string name="backup_unsupported">That file was written by a newer version of atomic</string>
+    <string name="backup_failed">Could not read that file: %1$s</string>
+    <string name="backup_write_failed">Could not write the file</string>
+    <string name="about_version">atomic %1$s (%2$d)</string>
+    <string name="about_source">Source code and issues</string>
+    <string name="about_license">Apache License 2.0</string>
+    <string name="about_crash_none">No crash recorded</string>
+    <string name="about_crash_recorded">A crash was recorded</string>
+    <string name="about_crash_share">Share the last crash report</string>
+    <string name="about_crash_clear">Clear the crash report</string>
+    <string name="crash_mail_subject">atomic crash report</string>
+    <string name="support_email" translatable="false">shresthasubhaneet+atomic@gmail.com</string>
+    <string name="source_url" translatable="false">https://github.com/subhaneetshrestha/atomic-launcher</string>
 </resources>
