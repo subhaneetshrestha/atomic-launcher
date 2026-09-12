@@ -14,6 +14,9 @@ captures/
 *.jks
 *.keystore
 *.p12
+# ...except the throwaway self-signed certificate for localhost that the fetcher tests serve with.
+# It signs nothing, is trusted by nothing, and the tests cannot reach a server without it.
+!app/src/test/resources/localhost.p12
 
 # OS
 .DS_Store
