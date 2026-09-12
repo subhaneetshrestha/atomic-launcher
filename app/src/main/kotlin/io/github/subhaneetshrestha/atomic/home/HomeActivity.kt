@@ -14,6 +14,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowCompat
 import io.github.subhaneetshrestha.atomic.R
 import io.github.subhaneetshrestha.atomic.ThemedActivity
 import io.github.subhaneetshrestha.atomic.actions.ActionAvailability
@@ -28,10 +29,18 @@ import io.github.subhaneetshrestha.atomic.apps.AppActions
 import io.github.subhaneetshrestha.atomic.apps.AppKey
 import io.github.subhaneetshrestha.atomic.apps.AppLauncher
 import io.github.subhaneetshrestha.atomic.apps.AppRepository
+import io.github.subhaneetshrestha.atomic.background.BackgroundController
+import io.github.subhaneetshrestha.atomic.background.BackgroundView
+import io.github.subhaneetshrestha.atomic.background.Legibility
+import io.github.subhaneetshrestha.atomic.core.theme.BackgroundMode
 import io.github.subhaneetshrestha.atomic.core.theme.BindingSurface
+import io.github.subhaneetshrestha.atomic.core.theme.ColorValue
 import io.github.subhaneetshrestha.atomic.core.theme.EdgeExclusion
 import io.github.subhaneetshrestha.atomic.core.theme.InfoPosition
+import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.core.theme.Settings
+import io.github.subhaneetshrestha.atomic.core.theme.Theme
+import io.github.subhaneetshrestha.atomic.core.theme.ThemeResolver
 import io.github.subhaneetshrestha.atomic.gestures.Dispatch
 import io.github.subhaneetshrestha.atomic.gestures.GestureDispatcher
 import io.github.subhaneetshrestha.atomic.gestures.GestureEvent
@@ -59,6 +68,7 @@ class HomeActivity :
 
     private lateinit var applier: ThemeApplier
     private lateinit var root: HomeRootView
+    private lateinit var backdrop: BackgroundView
     private lateinit var block: LinearLayout
     private lateinit var list: HomeListView
     private lateinit var infoLines: InfoLinesView
@@ -78,6 +88,7 @@ class HomeActivity :
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshBanner() }
     private val snapshotListener = AppRepository.Listener { render() }
     private val badgeListener = BadgeStore.Listener { render() }
+    private val backgroundListener = BackgroundController.Listener { render() }
     private val documentListener: (Settings, Settings) -> Unit = { old, new ->
         if (old.appearance.nightMode != new.appearance.nightMode) recreate() else render()
     }
@@ -125,6 +136,10 @@ class HomeActivity :
         infoLines = InfoLinesView(this, applier).apply { onSurface = ::onSurfaceTouched }
         block = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         banner = DefaultHomeBanner(this, applier).apply { setOnClickListener { defaultHome.request(roleRequest) } }
+        backdrop =
+            BackgroundView(this).apply {
+                onSize = { width, height -> atomicApp.background.onWindowSize(width, height) }
+            }
         searchOverlay =
             SearchOverlay(this, applier).apply {
                 onLaunch = ::launchByKey
@@ -133,6 +148,7 @@ class HomeActivity :
             }
         root =
             HomeRootView(this).apply {
+                setBackgroundLayer(backdrop)
                 setBlock(block, applier.verticalGravity(settings.current.verticalPosition))
                 addFooter(banner)
                 setOverlay(searchOverlay)
@@ -166,6 +182,7 @@ class HomeActivity :
         repository.addListener(snapshotListener)
         settings.addDocumentListener(documentListener)
         atomicApp.badges.store.addListener(badgeListener)
+        atomicApp.background.addListener(backgroundListener)
         infoLines.onStart()
         render()
     }
@@ -176,6 +193,9 @@ class HomeActivity :
         // The user may have granted or revoked notification access while we were away.
         atomicApp.badges.onAccessChanged(NotificationAccess.isGranted(this))
         repository.ensureFresh(resources.configuration.locales)
+        // Quietly, and only if the interval has run out: a phone that decided this app is idle
+        // may not have run the scheduled job for days.
+        atomicApp.background.onHomeResumed()
     }
 
     override fun onStop() {
@@ -185,6 +205,7 @@ class HomeActivity :
         repository.removeListener(snapshotListener)
         settings.removeDocumentListener(documentListener)
         atomicApp.badges.store.removeListener(badgeListener)
+        atomicApp.background.removeListener(backgroundListener)
         infoLines.onStop()
         settings.flush()
         super.onStop()
@@ -207,6 +228,8 @@ class HomeActivity :
 
     override fun openDrawer() = showSearch(withKeyboard = false)
 
+    override fun nextBackground(): Boolean = atomicApp.background.requestNext()
+
     private fun showSearch(withKeyboard: Boolean) {
         // Built on the way in: the list is small, so a rename or a new app is never stale.
         val index = AppSearchIndex.build(repository.current.entries, settings.current)
@@ -228,8 +251,12 @@ class HomeActivity :
     private fun render() {
         val view = settings.current
         val document = settings.settings
-        val colors = atomicApp.resolvedColors(this)
-        window.setBackgroundDrawable(ColorDrawable(colors.background))
+        val theme = document.theme
+        val themeColors = atomicApp.resolvedColors(this)
+        val legibility = atomicApp.background.legibility.takeIf { theme.background.mode == BackgroundMode.COLLECTION }
+        val colors = themeColors.over(legibility, theme)
+        applyWindowBackground(theme, themeColors)
+        applySystemBars(legibility, themeColors)
         arrangeBlock(document.homeInfo.position)
         val h = applier.dp(view.horizontalPaddingDp)
         val v = applier.dp(view.verticalPaddingDp)
@@ -242,6 +269,69 @@ class HomeActivity :
         haptics.enabled = document.gestures.haptics
         root.takeOverSideEdges = document.gestures.edgeExclusion == EdgeExclusion.BOTH
         root.positionBlock(applier.verticalGravity(view.verticalPosition))
+    }
+
+    /**
+     * The window itself is the colour of the theme, so the first frame after a cold start is
+     * already right; in wallpaper mode it is transparent instead and the device wallpaper shows
+     * through, which costs the launcher no memory and needs no permission.
+     */
+    private fun applyWindowBackground(
+        theme: Theme,
+        colors: ResolvedColors,
+    ) {
+        val wallpaper = theme.background.mode == BackgroundMode.WALLPAPER
+        if (wallpaper) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        }
+        window.setBackgroundDrawable(ColorDrawable(if (wallpaper) Color.TRANSPARENT else colors.background))
+        backdrop.apply(theme.background, colors.background)
+        backdrop.setImage(atomicApp.background.image, animate = true)
+    }
+
+    /** Dark icons on a light background, whether that background is the theme's or a photograph. */
+    private fun applySystemBars(
+        legibility: Legibility?,
+        colors: ResolvedColors,
+    ) {
+        val controller = WindowCompat.getInsetsController(window, root)
+        val light = ThemeResolver.relativeLuminance(colors.background) > ThemeResolver.LUMINANCE_THRESHOLD
+        controller.isAppearanceLightStatusBars = legibility?.darkStatusIcons ?: light
+        controller.isAppearanceLightNavigationBars = legibility?.darkNavIcons ?: light
+    }
+
+    /**
+     * Over an image the theme's own text colours may be invisible, so the names, the info lines
+     * and an automatic badge take black or white from what the image turned out to look like.
+     */
+    private fun ResolvedColors.over(
+        legibility: Legibility?,
+        theme: Theme,
+    ): ResolvedColors {
+        if (legibility == null) return this
+        val front = if (legibility.darkText) BLACK_RGB else WHITE_RGB
+        val behind = if (legibility.darkText) WHITE_RGB else BLACK_RGB
+
+        fun tint(
+            color: Int,
+            rgb: Int,
+        ) = (color and ALPHA_MASK) or rgb
+        return copy(
+            text = tint(text, front),
+            textSecondary = tint(textSecondary, front),
+            accent = tint(accent, front),
+            badgeBackground =
+                if (theme.badge.background ==
+                    ColorValue.AUTO
+                ) {
+                    tint(badgeBackground, front)
+                } else {
+                    badgeBackground
+                },
+            badgeText = if (theme.badge.text == ColorValue.AUTO) tint(badgeText, behind) else badgeText,
+        )
     }
 
     private fun arrangeBlock(position: InfoPosition) {
@@ -315,5 +405,8 @@ class HomeActivity :
 
     private companion object {
         const val TAG = "HomeActivity"
+        const val ALPHA_MASK = 0xFF000000.toInt()
+        const val BLACK_RGB = 0x000000
+        const val WHITE_RGB = 0xFFFFFF
     }
 }

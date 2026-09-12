@@ -181,6 +181,62 @@
         <item quantity="other">%1$s, %2$d notifications</item>
     </plurals>
 
+    <!-- Background -->
+    <string name="settings_background">Background</string>
+    <string name="background_mode">Behind the names</string>
+    <string name="background_color">Theme colour</string>
+    <string name="background_color_detail">Whatever the theme says, and nothing else drawn</string>
+    <string name="background_gradient">Gradient</string>
+    <string name="background_gradient_detail">Two colours, one fading into the other</string>
+    <string name="background_wallpaper">Your wallpaper</string>
+    <string name="background_wallpaper_detail">Shows the wallpaper you already have, through the launcher</string>
+    <string name="background_collection">Image collection</string>
+    <string name="background_collection_detail">Downloads images from an address you choose</string>
+    <string name="background_from">Starts with</string>
+    <string name="background_to">Ends with</string>
+    <string name="background_direction">Direction</string>
+    <string name="background_direction_down">Top to bottom</string>
+    <string name="background_direction_right">Left to right</string>
+    <string name="background_direction_up">Bottom to top</string>
+    <string name="background_direction_left">Right to left</string>
+    <string name="background_colour_hint">#RRGGBB</string>
+    <string name="background_colour_invalid">That is not a colour. Use #RRGGBB or #AARRGGBB.</string>
+    <string name="background_address">Collection address</string>
+    <string name="background_address_none">Not set: no images are downloaded</string>
+    <string name="background_address_hint">https://example.org/wallpapers.txt</string>
+    <string name="background_address_help">A list of image addresses, a feed, a JSON document, a Wallhaven search, or one image. It has to start with https.</string>
+    <string name="background_address_invalid">That address %s</string>
+    <string name="background_address_host">Images will be downloaded from %s whenever the background changes.</string>
+    <string name="background_interval">Change every</string>
+    <string name="background_unmetered">Only on wi‑fi</string>
+    <string name="background_unmetered_detail">Never spends mobile data on a wallpaper</string>
+    <string name="background_shuffle">Shuffle</string>
+    <string name="background_shuffle_detail">Pick at random instead of going in order</string>
+    <string name="background_dim">Dim</string>
+    <string name="background_dim_value">%d%%</string>
+    <string name="background_auto_text">Take the text colour from the image</string>
+    <string name="background_auto_text_detail">Black names on a bright photograph, white on a dark one</string>
+    <string name="background_change_now">Change now</string>
+    <string name="background_changing">Fetching…</string>
+    <string name="background_status_none">No image yet</string>
+    <string name="background_status_showing">%1$d images in the collection, changed %2$s</string>
+    <string name="background_status_error">Last try: %s</string>
+    <string name="background_status_no_network">Waiting for a connection</string>
+    <string name="background_status_metered">Waiting for wi‑fi</string>
+    <string name="background_status_data_saver">Data Saver is on, so nothing is downloaded</string>
+    <string name="background_status_power_save">Battery saver is on, so nothing is downloaded</string>
+    <string name="background_interval_15">15 minutes</string>
+    <string name="background_interval_30">30 minutes</string>
+    <string name="background_interval_60">1 hour</string>
+    <string name="background_interval_180">3 hours</string>
+    <string name="background_interval_360">6 hours</string>
+    <string name="background_interval_720">12 hours</string>
+    <string name="background_interval_1440">1 day</string>
+    <string name="background_when_just_now">just now</string>
+    <string name="background_when_minutes">%d minutes ago</string>
+    <string name="background_when_hours">%d hours ago</string>
+    <string name="background_when_days">%d days ago</string>
+
     <!-- Notification access: the disclosure shown before Settings is opened -->
     <string name="grant_notification_title">Notification access</string>
     <string name="grant_notification_what">To count what is waiting for each app, atomic needs Android\u2019s notification access. Android asks for this in Settings; the next screen is Settings, not atomic.</string>

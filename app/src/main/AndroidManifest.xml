@@ -17,6 +17,13 @@
     <!-- Uninstall through the system dialog from the app menu (normal permission). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
+    <!--
+        Fetching a background from a collection the user configured. Both are normal permissions,
+        nothing is uploaded, and no request is made at all until a collection address is entered.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:name=".AtomicApp"
         android:allowBackup="true"
@@ -65,6 +72,15 @@
             android:name=".settings.SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title" />
+
+        <!--
+            The scheduled turn of the background. Exported because JobScheduler starts it, and
+            guarded by BIND_JOB_SERVICE so only the system can.
+        -->
+        <service
+            android:name=".background.BackgroundJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <!--
             Notification badges. Exported because the system binds it, and guarded by the

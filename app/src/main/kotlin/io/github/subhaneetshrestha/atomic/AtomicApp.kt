@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.StrictMode
 import androidx.core.content.pm.PackageInfoCompat
 import io.github.subhaneetshrestha.atomic.apps.AppRepository
+import io.github.subhaneetshrestha.atomic.background.BackgroundController
 import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.core.theme.ThemeResolver
 import io.github.subhaneetshrestha.atomic.diagnostics.CrashEnvironment
@@ -40,6 +41,9 @@ class AtomicApp : Application() {
     lateinit var badges: BadgeController
         private set
 
+    lateinit var background: BackgroundController
+        private set
+
     /** The first-run setup is offered once per process; the persisted flag decides across processes. */
     var setupOffered: Boolean = false
 
@@ -66,6 +70,16 @@ class AtomicApp : Application() {
         // A later phase skips all of this when running in the accessibility service's own process.
         appRepository = AppRepository(this).also { it.start() }
         badges = BadgeController(this, settingsRepository).also { it.start() }
+        background = BackgroundController(this, settingsRepository).also { it.start() }
+    }
+
+    /**
+     * The background image is the one thing the launcher holds that is worth megabytes, so it is
+     * the first thing given back when the system says it is short.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (::background.isInitialized) background.onTrimMemory(level)
     }
 
     /** The current theme's colours for [context]'s day/night state. */

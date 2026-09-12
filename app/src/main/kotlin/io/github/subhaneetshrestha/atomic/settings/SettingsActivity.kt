@@ -30,11 +30,19 @@ import io.github.subhaneetshrestha.atomic.actions.Availability
 import io.github.subhaneetshrestha.atomic.actions.BuiltinActions
 import io.github.subhaneetshrestha.atomic.apps.AppEntry
 import io.github.subhaneetshrestha.atomic.apps.AppKey
+import io.github.subhaneetshrestha.atomic.background.BackgroundController
+import io.github.subhaneetshrestha.atomic.background.BackgroundEngine
+import io.github.subhaneetshrestha.atomic.background.BackgroundStatus
+import io.github.subhaneetshrestha.atomic.background.SkipReason
+import io.github.subhaneetshrestha.atomic.core.collections.UrlRules
 import io.github.subhaneetshrestha.atomic.core.theme.Action
 import io.github.subhaneetshrestha.atomic.core.theme.ActionGroup
+import io.github.subhaneetshrestha.atomic.core.theme.Background
+import io.github.subhaneetshrestha.atomic.core.theme.BackgroundMode
 import io.github.subhaneetshrestha.atomic.core.theme.BindingSurface
 import io.github.subhaneetshrestha.atomic.core.theme.BuiltinId
 import io.github.subhaneetshrestha.atomic.core.theme.BuiltinThemes
+import io.github.subhaneetshrestha.atomic.core.theme.ColorValue
 import io.github.subhaneetshrestha.atomic.core.theme.ConsentKind
 import io.github.subhaneetshrestha.atomic.core.theme.DecodeResult
 import io.github.subhaneetshrestha.atomic.core.theme.EdgeExclusion
@@ -86,8 +94,11 @@ class SettingsActivity : ThemedActivity() {
     private val importLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(::importFrom) }
     private val documentListener: (Settings, Settings) -> Unit = { old, new ->
-        if (old.theme != new.theme || old.appearance != new.appearance) recreate() else stack.lastOrNull()?.refresh()
+        // Everything about a theme but its background decides the colours this screen is drawn in.
+        val looksDifferent = old.theme.copy(background = new.theme.background) != new.theme
+        if (looksDifferent || old.appearance != new.appearance) recreate() else stack.lastOrNull()?.refresh()
     }
+    private val backgroundListener = BackgroundController.Listener { stack.lastOrNull()?.refresh() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -139,6 +150,7 @@ class SettingsActivity : ThemedActivity() {
     override fun onStart() {
         super.onStart()
         settings.addDocumentListener(documentListener)
+        atomicApp.background.addListener(backgroundListener)
     }
 
     override fun onResume() {
@@ -153,6 +165,7 @@ class SettingsActivity : ThemedActivity() {
 
     override fun onStop() {
         settings.removeDocumentListener(documentListener)
+        atomicApp.background.removeListener(backgroundListener)
         settings.flush()
         super.onStop()
     }
@@ -179,6 +192,7 @@ class SettingsActivity : ThemedActivity() {
             ScreenId.ACTION_PICKER -> ActionPickerScreen(arg)
             ScreenId.APP_PICKER -> AppPickerScreen(arg)
             ScreenId.THEME -> ThemeScreen()
+            ScreenId.BACKGROUND -> BackgroundScreen()
             ScreenId.APPEARANCE -> AppearanceScreen()
             ScreenId.BACKUP -> BackupScreen()
             ScreenId.ABOUT -> AboutScreen()
@@ -264,6 +278,26 @@ class SettingsActivity : ThemedActivity() {
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
 
+    /** A dialog with one field in it, the shape every "type this in" setting uses. */
+    private fun prompt(
+        titleRes: Int,
+        message: String?,
+        input: EditText,
+        onOk: () -> Unit,
+    ) {
+        val pad = dp(20)
+        val container = FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0) }
+        container.addView(input)
+        AlertDialog
+            .Builder(this)
+            .setTitle(titleRes)
+            .setMessage(message)
+            .setView(container)
+            .setPositiveButton(android.R.string.ok) { _, _ -> onOk() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     // ---- screens ------------------------------------------------------------------------------
 
     private enum class ScreenId {
@@ -278,6 +312,7 @@ class SettingsActivity : ThemedActivity() {
         ACTION_PICKER,
         APP_PICKER,
         THEME,
+        BACKGROUND,
         APPEARANCE,
         BACKUP,
         ABOUT,
@@ -304,6 +339,7 @@ class SettingsActivity : ThemedActivity() {
                     R.string.settings_gestures to { push(GesturesScreen()) },
                     R.string.settings_badges to { push(BadgesScreen()) },
                     R.string.settings_theme to { push(ThemeScreen()) },
+                    R.string.settings_background to { push(BackgroundScreen()) },
                     R.string.settings_appearance to { push(AppearanceScreen()) },
                     R.string.settings_backup to { push(BackupScreen()) },
                     R.string.settings_about to { push(AboutScreen()) },
@@ -598,6 +634,224 @@ class SettingsActivity : ThemedActivity() {
         }
     }
 
+    /**
+     * What is behind the names. The rows below the mode change with it, because a gradient and a
+     * collection have nothing in common to configure.
+     */
+    private inner class BackgroundScreen : Screen(ScreenId.BACKGROUND, R.string.settings_background) {
+        private lateinit var adapter: RowAdapter
+        private val rows = mutableListOf<Row>()
+        private val taps = mutableListOf<() -> Unit>()
+
+        override fun createView(): View {
+            adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
+            refresh()
+            return list(adapter, onClick = { position -> taps.getOrNull(position)?.invoke() })
+        }
+
+        override fun refresh() {
+            rows.clear()
+            taps.clear()
+            val background = settings.settings.theme.background
+            add(Row(getString(R.string.background_mode), isHeader = true))
+            for ((mode, label, detail) in MODES) {
+                add(
+                    Row(getString(label), getString(detail), checked = background.mode == mode, singleChoice = true),
+                ) { edit { it.copy(mode = mode) } }
+            }
+            when (background.mode) {
+                BackgroundMode.GRADIENT -> gradientRows(background)
+                BackgroundMode.COLLECTION -> collectionRows(background)
+                else -> Unit
+            }
+            adapter.rows = rows.toList()
+            adapter.notifyDataSetChanged()
+        }
+
+        private fun gradientRows(background: Background) {
+            val gradient = background.gradient
+            add(Row(getString(R.string.background_from), gradient.from)) {
+                askColour(R.string.background_from, gradient.from) { value ->
+                    edit { it.copy(gradient = it.gradient.copy(from = value)) }
+                }
+            }
+            add(Row(getString(R.string.background_to), gradient.to)) {
+                askColour(R.string.background_to, gradient.to) { value ->
+                    edit { it.copy(gradient = it.gradient.copy(to = value)) }
+                }
+            }
+            add(Row(getString(R.string.background_direction), getString(directionLabel(gradient.angle)))) {
+                choose(R.string.background_direction, DIRECTIONS.map { getString(it.second) }) { index ->
+                    edit { it.copy(gradient = it.gradient.copy(angle = DIRECTIONS[index].first)) }
+                }
+            }
+        }
+
+        private fun collectionRows(background: Background) {
+            val collection = background.collection
+            add(
+                Row(
+                    getString(R.string.background_address),
+                    collection.url.ifEmpty { getString(R.string.background_address_none) },
+                ),
+            ) { askForCollection(collection.url) }
+            add(Row(getString(R.string.background_interval), getString(intervalLabel(collection.intervalMinutes)))) {
+                choose(R.string.background_interval, INTERVALS.map { getString(it.second) }) { index ->
+                    edit { it.copy(collection = it.collection.copy(intervalMinutes = INTERVALS[index].first)) }
+                }
+            }
+            add(
+                Row(
+                    getString(R.string.background_unmetered),
+                    getString(R.string.background_unmetered_detail),
+                    checked = collection.unmeteredOnly,
+                ),
+            ) { edit { it.copy(collection = it.collection.copy(unmeteredOnly = !collection.unmeteredOnly)) } }
+            add(
+                Row(
+                    getString(R.string.background_shuffle),
+                    getString(R.string.background_shuffle_detail),
+                    checked = collection.shuffle,
+                ),
+            ) { edit { it.copy(collection = it.collection.copy(shuffle = !collection.shuffle)) } }
+            add(
+                Row(
+                    getString(R.string.background_dim),
+                    getString(R.string.background_dim_value, (background.dim * PERCENT).toInt()),
+                ),
+            ) {
+                choose(R.string.background_dim, DIMS.map { getString(R.string.background_dim_value, it) }) { index ->
+                    edit { it.copy(dim = DIMS[index] / PERCENT.toFloat()) }
+                }
+            }
+            add(
+                Row(
+                    getString(R.string.background_auto_text),
+                    getString(R.string.background_auto_text_detail),
+                    checked = background.autoTextColor,
+                ),
+            ) { edit { it.copy(autoTextColor = !background.autoTextColor) } }
+            add(
+                Row(getString(R.string.background_change_now), statusLine(), enabled = collection.isConfigured),
+            ) { if (!atomicApp.background.requestNext()) toast(getString(R.string.background_address_none)) }
+        }
+
+        /** What the engine did last, in the user's words rather than the log's. */
+        private fun statusLine(): String {
+            val status: BackgroundStatus = atomicApp.background.status
+            val skip = status.lastSkip?.let { runCatching { SkipReason.valueOf(it) }.getOrNull() }
+            return when {
+                status.working -> {
+                    getString(R.string.background_changing)
+                }
+
+                skip != null -> {
+                    getString(
+                        when (skip) {
+                            SkipReason.NO_NETWORK -> R.string.background_status_no_network
+                            SkipReason.METERED -> R.string.background_status_metered
+                            SkipReason.DATA_SAVER -> R.string.background_status_data_saver
+                            SkipReason.POWER_SAVE -> R.string.background_status_power_save
+                        },
+                    )
+                }
+
+                status.lastError != null -> {
+                    getString(R.string.background_status_error, status.lastError)
+                }
+
+                status.currentUrl != null -> {
+                    getString(R.string.background_status_showing, status.imageCount, ago(status.changedAt))
+                }
+
+                else -> {
+                    getString(R.string.background_status_none)
+                }
+            }
+        }
+
+        private fun ago(moment: Long): String {
+            val minutes = ((System.currentTimeMillis() - moment) / 60_000L).coerceAtLeast(0)
+            return when {
+                minutes < 1 -> getString(R.string.background_when_just_now)
+                minutes < 60 -> getString(R.string.background_when_minutes, minutes.toInt())
+                minutes < 60 * 24 -> getString(R.string.background_when_hours, (minutes / 60).toInt())
+                else -> getString(R.string.background_when_days, (minutes / (60 * 24)).toInt())
+            }
+        }
+
+        /** The address is checked, and then the host it would download from is named out loud. */
+        private fun askForCollection(current: String) {
+            val input =
+                EditText(this@SettingsActivity).apply {
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+                    setHint(R.string.background_address_hint)
+                    setText(current)
+                }
+            prompt(R.string.background_address, getString(R.string.background_address_help), input) {
+                val url = input.text.toString().trim()
+                if (url.isEmpty()) {
+                    edit { it.copy(collection = it.collection.copy(url = "")) }
+                    return@prompt
+                }
+                val problem = UrlRules.problemWith(url)
+                if (problem != null) {
+                    toast(getString(R.string.background_address_invalid, problem))
+                    return@prompt
+                }
+                AlertDialog
+                    .Builder(this@SettingsActivity)
+                    .setTitle(R.string.background_address)
+                    .setMessage(getString(R.string.background_address_host, UrlRules.hostOf(url).orEmpty()))
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        edit { it.copy(collection = it.collection.copy(url = url)) }
+                    }.setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
+
+        private fun askColour(
+            titleRes: Int,
+            current: String,
+            apply: (String) -> Unit,
+        ) {
+            val input =
+                EditText(this@SettingsActivity).apply {
+                    inputType = InputType.TYPE_CLASS_TEXT
+                    setHint(R.string.background_colour_hint)
+                    setText(current)
+                }
+            prompt(titleRes, null, input) {
+                val value = ColorValue.normalize(input.text.toString(), allowAuto = false)
+                if (value == null) toast(getString(R.string.background_colour_invalid)) else apply(value)
+            }
+        }
+
+        private fun choose(
+            titleRes: Int,
+            labels: List<String>,
+            pick: (Int) -> Unit,
+        ) {
+            AlertDialog
+                .Builder(this@SettingsActivity)
+                .setTitle(titleRes)
+                .setItems(labels.toTypedArray()) { _, index -> pick(index) }
+                .show()
+        }
+
+        private fun add(
+            row: Row,
+            tap: () -> Unit = {},
+        ) {
+            rows += row
+            taps += tap
+        }
+
+        private fun edit(transform: (Background) -> Background) {
+            settings.update { it.copy(theme = it.theme.copy(background = transform(it.theme.background))) }
+        }
+    }
+
     private inner class ThemeScreen : Screen(ScreenId.THEME, R.string.settings_theme) {
         override fun createView(): View {
             val themes = BuiltinThemes.all
@@ -615,7 +869,15 @@ class SettingsActivity : ThemedActivity() {
                         )
                     },
                 )
-            return list(adapter, onClick = { position -> settings.update { it.copy(theme = themes[position]) } })
+            return list(adapter, onClick = { position ->
+                settings.update { current ->
+                    // A built-in brings its colours, not a background: the one set up here stays.
+                    val chosen = themes[position]
+                    val background =
+                        if (chosen.background == Background()) current.theme.background else chosen.background
+                    current.copy(theme = chosen.copy(background = background))
+                }
+            })
         }
     }
 
@@ -1048,6 +1310,50 @@ class SettingsActivity : ThemedActivity() {
     }
 
     private companion object {
+        /** The four ways to fill the screen behind the names, in the order they are offered. */
+        val MODES =
+            listOf(
+                Triple(BackgroundMode.COLOR, R.string.background_color, R.string.background_color_detail),
+                Triple(BackgroundMode.GRADIENT, R.string.background_gradient, R.string.background_gradient_detail),
+                Triple(BackgroundMode.WALLPAPER, R.string.background_wallpaper, R.string.background_wallpaper_detail),
+                Triple(
+                    BackgroundMode.COLLECTION,
+                    R.string.background_collection,
+                    R.string.background_collection_detail,
+                ),
+            )
+
+        val DIRECTIONS =
+            listOf(
+                0 to R.string.background_direction_down,
+                90 to R.string.background_direction_right,
+                180 to R.string.background_direction_up,
+                270 to R.string.background_direction_left,
+            )
+
+        val INTERVALS =
+            listOf(
+                15 to R.string.background_interval_15,
+                30 to R.string.background_interval_30,
+                60 to R.string.background_interval_60,
+                180 to R.string.background_interval_180,
+                360 to R.string.background_interval_360,
+                720 to R.string.background_interval_720,
+                1440 to R.string.background_interval_1440,
+            )
+
+        val DIMS = listOf(0, 15, 25, 35, 50, 65, 80)
+
+        const val PERCENT = 100
+
+        fun directionLabel(angle: Int): Int =
+            DIRECTIONS.minByOrNull { kotlin.math.abs(it.first - angle) }?.second
+                ?: R.string.background_direction_down
+
+        fun intervalLabel(minutes: Int): Int =
+            INTERVALS.minByOrNull { kotlin.math.abs(it.first - minutes) }?.second
+                ?: R.string.background_interval_360
+
         const val TAG = "SettingsActivity"
         const val STATE_STACK = "stack"
         const val STATE_ARGS = "args"

@@ -89,6 +89,11 @@ class HomeRootView(
         }
     }
 
+    /** Painted behind everything, edge to edge: the colour, gradient or image of the theme. */
+    fun setBackgroundLayer(view: View) {
+        addView(view, 0, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    }
+
     /** Covers everything, above the app list and the info lines; it takes its own insets. */
     fun setOverlay(view: View) {
         addView(view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))

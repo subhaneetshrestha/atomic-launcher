@@ -22,16 +22,13 @@ object BuiltinActions {
     /** GLOBAL_ACTION_LOCK_SCREEN arrived in Android 9; below that only device admin can lock. */
     const val ACCESSIBILITY_LOCK_SDK = 28
 
-    /**
-     * The launcher's own surfaces this version has built. The rotating background arrives with the
-     * phase that builds it; its action exists meanwhile so a backup written by a newer version
-     * keeps its bindings.
-     */
+    /** The launcher's own surfaces this version has built. */
     val BUILT_SURFACES: Set<BuiltinId> =
         setOf(
             BuiltinId.LAUNCHER_SETTINGS,
             BuiltinId.DEFAULT_LAUNCHER_CHOOSER,
             BuiltinId.OPEN_SEARCH,
             BuiltinId.OPEN_DRAWER,
+            BuiltinId.NEXT_BACKGROUND,
         )
 }

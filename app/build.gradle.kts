@@ -85,6 +85,9 @@ android {
 
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
+        // android.util.Log and friends answer with defaults instead of throwing, so classes whose
+        // only tie to Android is a log line (the image fetcher) can be tested on the JVM.
+        unitTests.isReturnDefaultValues = true
     }
 }
 
@@ -94,6 +97,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(project(":core:theme"))
     implementation(project(":core:search"))
+    implementation(project(":core:collections"))
 
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(platform(libs.junit.bom))

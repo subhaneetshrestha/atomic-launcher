@@ -32,6 +32,9 @@ interface LauncherSurfaces {
 
     /** The same list of apps, without the keyboard in the way. */
     fun openDrawer()
+
+    /** Shows the next image from the collection; false when no collection is set up to ask. */
+    fun nextBackground(): Boolean
 }
 
 /**
@@ -116,6 +119,10 @@ class ActionRunner(
             BuiltinId.OPEN_DRAWER -> {
                 surfaces.openDrawer()
                 true
+            }
+
+            BuiltinId.NEXT_BACKGROUND -> {
+                surfaces.nextBackground()
             }
 
             BuiltinId.FLASHLIGHT_TOGGLE -> {
