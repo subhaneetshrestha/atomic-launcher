@@ -31,6 +31,8 @@ class AndroidActionEnvironment(
 
     override val accessibilityEnabled: Boolean get() = system.isEnabled
 
+    override val shadeWithoutAccessibility: Boolean get() = system.shadeWithoutAccessibility
+
     override val deviceAdminActive: Boolean get() = system.isDeviceAdminActive
 
     override fun appExists(

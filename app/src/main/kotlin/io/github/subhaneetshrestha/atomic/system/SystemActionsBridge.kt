@@ -4,10 +4,9 @@ import io.github.subhaneetshrestha.atomic.core.theme.BuiltinId
 
 /**
  * The way to the actions only a privileged component can perform: locking the screen, the
- * notification shade, quick settings, recents, a screenshot, the power menu. The optional
- * accessibility service that carries them out arrives in a later phase; until then this build
- * declares it supports none of them, so they are offered as "not in this version" rather than
- * asking the user to allow a service that is not there.
+ * notification shade, quick settings, recents, a screenshot, the power menu. Most of them need the
+ * optional accessibility service, which is off until the user turns it on; the shade sometimes
+ * needs nothing at all, and the lock will take a device administrator instead.
  */
 interface SystemActionsBridge {
     val isEnabled: Boolean
@@ -17,15 +16,8 @@ interface SystemActionsBridge {
     /** The actions this build can actually perform. */
     val supported: Set<BuiltinId>
 
+    /** Whether this Android still lets an app open the shade without anything being granted. */
+    val shadeWithoutAccessibility: Boolean
+
     fun perform(id: BuiltinId): Boolean
-}
-
-object NoSystemActions : SystemActionsBridge {
-    override val isEnabled: Boolean = false
-
-    override val isDeviceAdminActive: Boolean = false
-
-    override val supported: Set<BuiltinId> = emptySet()
-
-    override fun perform(id: BuiltinId): Boolean = false
 }

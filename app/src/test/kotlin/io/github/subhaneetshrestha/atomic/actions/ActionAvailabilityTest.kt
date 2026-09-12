@@ -128,6 +128,7 @@ class FakeActionEnvironment(
     override var hasTorch: Boolean = true,
     override var isDefaultLauncher: Boolean = true,
     override var accessibilityEnabled: Boolean = false,
+    override var shadeWithoutAccessibility: Boolean = false,
     override var deviceAdminActive: Boolean = false,
 ) : ActionEnvironment {
     val installed = mutableSetOf("com.a/com.a.Main")

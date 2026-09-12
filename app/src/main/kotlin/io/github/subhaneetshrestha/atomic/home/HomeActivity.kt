@@ -29,6 +29,7 @@ import io.github.subhaneetshrestha.atomic.apps.AppActions
 import io.github.subhaneetshrestha.atomic.apps.AppKey
 import io.github.subhaneetshrestha.atomic.apps.AppLauncher
 import io.github.subhaneetshrestha.atomic.apps.AppRepository
+import io.github.subhaneetshrestha.atomic.apps.ShortcutProvider
 import io.github.subhaneetshrestha.atomic.background.BackgroundController
 import io.github.subhaneetshrestha.atomic.background.BackgroundView
 import io.github.subhaneetshrestha.atomic.background.Legibility
@@ -53,7 +54,6 @@ import io.github.subhaneetshrestha.atomic.search.SearchOverlay
 import io.github.subhaneetshrestha.atomic.settings.SettingsActivity
 import io.github.subhaneetshrestha.atomic.settings.SettingsRepository
 import io.github.subhaneetshrestha.atomic.setup.SetupActivity
-import io.github.subhaneetshrestha.atomic.system.NoSystemActions
 import io.github.subhaneetshrestha.atomic.util.Logs
 
 /**
@@ -117,12 +117,12 @@ class HomeActivity :
         defaultHome = DefaultHomePrompt(this)
 
         val appActions = AppActions(this, repository)
-        appMenu = AppMenu(this, settings, appActions)
+        appMenu = AppMenu(this, settings, appActions, ShortcutProvider(this, repository))
         environment =
-            AndroidActionEnvironment(this, repository, NoSystemActions, BuiltinActions.BUILT_SURFACES) {
+            AndroidActionEnvironment(this, repository, atomicApp.systemActions, BuiltinActions.BUILT_SURFACES) {
                 defaultHome.isDefaultHome()
             }
-        runner = ActionRunner(this, environment, this, repository, launcher, appActions, NoSystemActions)
+        runner = ActionRunner(this, environment, this, repository, launcher, appActions, atomicApp.systemActions)
         dispatcher = GestureDispatcher(ActionAvailability(environment))
         list =
             HomeListView(this, applier).apply {

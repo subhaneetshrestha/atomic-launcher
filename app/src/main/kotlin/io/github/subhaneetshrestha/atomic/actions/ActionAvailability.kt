@@ -76,6 +76,12 @@ class ActionAvailability(
                 lockScreen()
             }
 
+            // The shade is the one privileged surface an app can sometimes reach on its own, and
+            // it is what swipe down does out of the box: worth offering with nothing granted.
+            id == BuiltinId.NOTIFICATION_SHADE && env.shadeWithoutAccessibility -> {
+                Availability.Available
+            }
+
             id.group == ActionGroup.SYSTEM && !env.accessibilityEnabled -> {
                 Availability.NeedsGrant(ActionGrant.ACCESSIBILITY)
             }

@@ -2,28 +2,33 @@ package io.github.subhaneetshrestha.atomic.home
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.graphics.Rect
 import android.text.InputFilter
 import android.text.InputType
 import android.view.View
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.Toast
 import io.github.subhaneetshrestha.atomic.R
 import io.github.subhaneetshrestha.atomic.apps.AppActions
 import io.github.subhaneetshrestha.atomic.apps.AppEntry
 import io.github.subhaneetshrestha.atomic.apps.AppKey
+import io.github.subhaneetshrestha.atomic.apps.AppShortcut
+import io.github.subhaneetshrestha.atomic.apps.ShortcutProvider
 import io.github.subhaneetshrestha.atomic.core.theme.Labels
 import io.github.subhaneetshrestha.atomic.core.theme.SettingsEdits
 import io.github.subhaneetshrestha.atomic.settings.SettingsRepository
 import io.github.subhaneetshrestha.atomic.settings.toRef
 
 /**
- * Long-press menu for an app row: home membership, rename, hide, app info, uninstall.
- * Shortcuts join in a later phase. Plain platform dialogs, themed by the activity.
+ * Long-press menu for an app row: its own shortcuts, home membership, rename, hide, app info,
+ * uninstall. Plain platform dialogs, themed by the activity.
  */
 class AppMenu(
     private val activity: Activity,
     private val settings: SettingsRepository,
     private val actions: AppActions,
+    private val shortcuts: ShortcutProvider,
 ) {
     /** [visibleRows] are the apps currently on the home screen, used to pin the alphabetical fallback before editing. */
     fun show(
@@ -37,6 +42,17 @@ class AppMenu(
         val visibleRefs = visibleRows.map { it.toRef() }
 
         val items = mutableListOf<Pair<Int, () -> Unit>>()
+        // Only the home app may read an app's shortcuts, so the row is there only when we are.
+        val published =
+            if (shortcuts.isAllowed) {
+                shortcuts.forPackage(
+                    entry.key.packageName,
+                    entry.key.userSerial,
+                )
+            } else {
+                emptyList()
+            }
+        if (published.isNotEmpty()) items += R.string.menu_shortcuts to { showShortcuts(entry, published, anchor) }
         items +=
             (if (onHome) R.string.menu_remove_from_home else R.string.menu_add_to_home) to {
                 settings.update { doc ->
@@ -64,6 +80,22 @@ class AppMenu(
             .setTitle(entry.label)
             .setItems(items.map { activity.getString(it.first) }.toTypedArray()) { _, which -> items[which].second() }
             .show()
+    }
+
+    private fun showShortcuts(
+        entry: AppEntry,
+        published: List<AppShortcut>,
+        anchor: View,
+    ) {
+        AlertDialog
+            .Builder(activity)
+            .setTitle(entry.label)
+            .setItems(published.map { it.label }.toTypedArray()) { _, which ->
+                val bounds = Rect().also { anchor.getGlobalVisibleRect(it) }
+                if (!shortcuts.start(entry.key.packageName, published[which].id, entry.key.userSerial, bounds)) {
+                    Toast.makeText(activity, R.string.action_failed, Toast.LENGTH_SHORT).show()
+                }
+            }.show()
     }
 
     private fun showRename(entry: AppEntry) {

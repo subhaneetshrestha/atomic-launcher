@@ -318,6 +318,57 @@
     <string name="editor_dp">%d dp</string>
     <string name="editor_number_invalid">That is not a number in range</string>
 
+    <!-- The optional accessibility service, and the two other special accesses -->
+    <string name="accessibility_label">atomic gestures</string>
+    <string name="accessibility_summary">Lets a gesture open the notification shade, quick settings or recents, lock the screen, take a screenshot, or show the power menu.</string>
+    <string name="accessibility_description">atomic uses this only to perform the actions you have bound to a gesture: the notification shade, quick settings, recents, the power menu, locking the screen and taking a screenshot. It is configured to receive no events and cannot read anything on your screen. It is off unless you turn it on, and turning it off again takes nothing else away.</string>
+    <string name="grant_accessibility_title">Gesture actions</string>
+    <string name="grant_accessibility_what">Six of the actions a gesture can be bound to — the notification shade, quick settings, recents, the power menu, locking the screen and a screenshot — are things Android only lets an accessibility service do. atomic has one, and it is off. Android turns it on in Settings; the next screen is Settings, not atomic.</string>
+    <string name="grant_accessibility_why">The service is set up to receive no events at all and cannot read what is on your screen. It sits idle until a gesture you bound asks it for one of those six actions, performs it, and stops.</string>
+    <string name="grant_accessibility_limits">It runs apart from the rest of atomic, so if it fails your home screen keeps working. Android shows its own reminder that a service is running, and you can turn it off in Settings whenever you like.</string>
+    <string name="grant_accessibility_granted">Gesture actions are on.</string>
+    <string name="grant_usage_title">Screen time</string>
+    <string name="grant_usage_what">To show how long the phone has been used today, atomic needs Android’s usage access. Android grants this in Settings; the next screen is Settings, not atomic.</string>
+    <string name="grant_usage_why">atomic reads when apps came to the front and when they left, for today only, and adds up the time between. atomic’s own time is left out, because a home screen is what is showing between two apps.</string>
+    <string name="grant_usage_limits">Nothing is written down and nothing leaves your phone: the total is worked out again each time it is shown. You can take this access away in Settings whenever you like.</string>
+    <string name="grant_usage_granted">Screen time is on.</string>
+    <string name="grant_admin_title">Lock the screen</string>
+    <string name="grant_admin_what">Locking the screen from a gesture needs atomic to be a device administrator, which is the only way an app may do it on Android 8, and an alternative to the accessibility service on later ones.</string>
+    <string name="grant_admin_why">atomic asks for one power and no others: force-lock. It cannot wipe the phone, change your PIN, or see what you do.</string>
+    <string name="grant_admin_limits">A screen locked this way asks for your PIN, pattern or password the next time, not your fingerprint. Android will not let atomic be uninstalled while it is an administrator, so turn this off first if you ever remove it.</string>
+    <string name="grant_admin_explanation">Lets a gesture lock the screen. atomic asks for no other power.</string>
+    <string name="grant_admin_granted">Locking is on.</string>
+    <string name="grant_admin_remove">Stop being an administrator</string>
+    <string name="grant_admin_removed">atomic is no longer a device administrator</string>
+    <string name="settings_system">Gestures that need permission</string>
+    <string name="system_accessibility">Gesture actions</string>
+    <string name="system_accessibility_on">On: the shade, quick settings, recents, the power menu, locking and screenshots</string>
+    <string name="system_accessibility_off">Off: six actions cannot run</string>
+    <string name="system_admin">Lock with a device administrator</string>
+    <string name="system_admin_on">On: a gesture can lock the screen</string>
+    <string name="system_admin_off">Off</string>
+    <string name="system_usage">Screen time</string>
+    <string name="system_usage_on">On</string>
+    <string name="system_usage_off">Off: the screen-time line shows nothing</string>
+    <string name="system_shade_free">This phone lets atomic open the shade without any of this</string>
+
+    <!-- Screen time and app shortcuts -->
+    <string name="screen_time_hours">%1$dh %2$02dm</string>
+    <string name="screen_time_minutes">%d min</string>
+    <string name="screen_time_needs_access">Screen time needs usage access</string>
+    <string name="settings_info_lines">Lines above the list</string>
+    <string name="info_clock">Clock</string>
+    <string name="info_date">Date</string>
+    <string name="info_battery">Battery</string>
+    <string name="info_screen_time">Screen time</string>
+    <string name="info_position">Where they sit</string>
+    <string name="info_above">Above the app list</string>
+    <string name="info_below">Below the app list</string>
+    <string name="info_bind_hint">What each line does when tapped is set under Gestures.</string>
+    <string name="menu_shortcuts">Shortcuts</string>
+    <string name="menu_no_shortcuts">This app has no shortcuts</string>
+    <string name="menu_shortcuts_need_default">Shortcuts need atomic to be the home app</string>
+
     <!-- Notification access: the disclosure shown before Settings is opened -->
     <string name="grant_notification_title">Notification access</string>
     <string name="grant_notification_what">To count what is waiting for each app, atomic needs Android\u2019s notification access. Android asks for this in Settings; the next screen is Settings, not atomic.</string>

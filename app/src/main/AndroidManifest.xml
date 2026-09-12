@@ -24,6 +24,21 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!--
+        Opening the notification shade where Android still lets an app do it. A normal permission,
+        granted at install; where the platform refuses, the optional accessibility service does it
+        instead, and only if the user turns that on.
+    -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+
+    <!--
+        Screen time. Declaring this is what puts atomic in Android's Usage Access list; it grants
+        nothing on its own, and the launcher reads nothing until the user turns it on there.
+    -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
     <application
         android:name=".AtomicApp"
         android:allowBackup="true"
@@ -142,6 +157,44 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!--
+            The six actions Android reserves for an accessibility service. Exported because the
+            system binds it, and guarded by BIND_ACCESSIBILITY_SERVICE so only the system can. It
+            asks for no events and no window content, and lives in its own process so that a fault
+            in it cannot take the home screen down: a home app that dies loses its default status.
+        -->
+        <service
+            android:name=".system.SystemActionsService"
+            android:exported="true"
+            android:label="@string/accessibility_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:process=":system">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!--
+            Device administrator, for force-lock and nothing else. The alternative to the
+            accessibility service for locking the screen, and the only way to do it on Android 8.
+        -->
+        <receiver
+            android:name=".system.LockAdminReceiver"
+            android:description="@string/grant_admin_explanation"
+            android:exported="true"
+            android:label="@string/grant_admin_title"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_policies" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
 
         <!--
             The scheduled turn of the background. Exported because JobScheduler starts it, and

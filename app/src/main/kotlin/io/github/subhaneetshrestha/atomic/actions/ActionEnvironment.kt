@@ -15,6 +15,9 @@ interface ActionEnvironment {
 
     val accessibilityEnabled: Boolean
 
+    /** Whether the notification shade can be opened with nothing granted. */
+    val shadeWithoutAccessibility: Boolean
+
     val deviceAdminActive: Boolean
 
     fun appExists(

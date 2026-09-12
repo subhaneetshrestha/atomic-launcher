@@ -18,7 +18,10 @@ import io.github.subhaneetshrestha.atomic.notifications.BadgeController
 import io.github.subhaneetshrestha.atomic.settings.NightModes
 import io.github.subhaneetshrestha.atomic.settings.SettingsRepository
 import io.github.subhaneetshrestha.atomic.settings.TokenColors
+import io.github.subhaneetshrestha.atomic.system.AndroidSystemActions
+import io.github.subhaneetshrestha.atomic.system.SystemActionsBridge
 import io.github.subhaneetshrestha.atomic.util.Logs
+import io.github.subhaneetshrestha.atomic.util.Processes
 import java.time.Instant
 
 /** Process singletons. Keeps onCreate to a few milliseconds: the home app starts at every boot. */
@@ -44,6 +47,9 @@ class AtomicApp : Application() {
     lateinit var background: BackgroundController
         private set
 
+    lateinit var systemActions: SystemActionsBridge
+        private set
+
     /** The first-run setup is offered once per process; the persisted flag decides across processes. */
     var setupOffered: Boolean = false
 
@@ -52,6 +58,9 @@ class AtomicApp : Application() {
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         Logs.enabled = debuggable
         if (debuggable) installStrictMode()
+        // The accessibility service has a process of its own and needs none of what follows: no
+        // settings, no apps, no badges, no background. It is told what to do and does it.
+        if (Processes.isSystemProcess(this)) return
         crashEnvironment = crashEnvironment()
         // Startup touches disk once on purpose: the private directory is created on first access
         // and the settings file (a few KB) is read synchronously so the first frame is final.
@@ -71,6 +80,7 @@ class AtomicApp : Application() {
         appRepository = AppRepository(this).also { it.start() }
         badges = BadgeController(this, settingsRepository).also { it.start() }
         background = BackgroundController(this, settingsRepository).also { it.start() }
+        systemActions = AndroidSystemActions(this)
     }
 
     /**

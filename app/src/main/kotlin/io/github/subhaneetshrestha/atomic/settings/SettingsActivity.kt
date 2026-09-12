@@ -51,6 +51,8 @@ import io.github.subhaneetshrestha.atomic.core.theme.DecodeResult
 import io.github.subhaneetshrestha.atomic.core.theme.EdgeExclusion
 import io.github.subhaneetshrestha.atomic.core.theme.HAlign
 import io.github.subhaneetshrestha.atomic.core.theme.HomeLimits
+import io.github.subhaneetshrestha.atomic.core.theme.InfoLineId
+import io.github.subhaneetshrestha.atomic.core.theme.InfoPosition
 import io.github.subhaneetshrestha.atomic.core.theme.Labels
 import io.github.subhaneetshrestha.atomic.core.theme.LinkRules
 import io.github.subhaneetshrestha.atomic.core.theme.NightMode
@@ -71,7 +73,7 @@ import io.github.subhaneetshrestha.atomic.settings.grant.InstallSourceProbe
 import io.github.subhaneetshrestha.atomic.settings.grant.Restriction
 import io.github.subhaneetshrestha.atomic.share.ImportActivity
 import io.github.subhaneetshrestha.atomic.share.ThemeFiles
-import io.github.subhaneetshrestha.atomic.system.NoSystemActions
+import io.github.subhaneetshrestha.atomic.system.DeviceAdminLock
 import io.github.subhaneetshrestha.atomic.util.Logs
 import io.github.subhaneetshrestha.atomic.util.Threads
 import io.github.subhaneetshrestha.atomic.util.readAtMost
@@ -89,7 +91,12 @@ class SettingsActivity : ThemedActivity() {
     private val settings: SettingsRepository get() = atomicApp.settingsRepository
     private val availability by lazy {
         ActionAvailability(
-            AndroidActionEnvironment(this, atomicApp.appRepository, NoSystemActions, BuiltinActions.BUILT_SURFACES) {
+            AndroidActionEnvironment(
+                this,
+                atomicApp.appRepository,
+                atomicApp.systemActions,
+                BuiltinActions.BUILT_SURFACES,
+            ) {
                 DefaultHomePrompt(this).isDefaultHome()
             },
         )
@@ -212,6 +219,8 @@ class SettingsActivity : ThemedActivity() {
             ScreenId.HIDDEN_APPS -> HiddenAppsScreen()
             ScreenId.GESTURES -> GesturesScreen()
             ScreenId.BADGES -> BadgesScreen()
+            ScreenId.SYSTEM -> SystemScreen()
+            ScreenId.INFO_LINES -> InfoLinesScreen()
             ScreenId.BADGE_APPS -> BadgeAppsScreen()
             ScreenId.GRANT -> GrantScreen(if (arg < 0) ConsentKind.NOTIFICATION_ACCESS.ordinal else arg)
             ScreenId.RESTRICTED_HELP -> RestrictedHelpScreen()
@@ -409,6 +418,8 @@ class SettingsActivity : ThemedActivity() {
         GESTURES,
         BADGES,
         BADGE_APPS,
+        SYSTEM,
+        INFO_LINES,
         GRANT,
         RESTRICTED_HELP,
         ACTION_PICKER,
@@ -440,7 +451,9 @@ class SettingsActivity : ThemedActivity() {
                     R.string.settings_home_apps to { push(HomeAppsScreen()) },
                     R.string.settings_hidden_apps to { push(HiddenAppsScreen()) },
                     R.string.settings_gestures to { push(GesturesScreen()) },
+                    R.string.settings_info_lines to { push(InfoLinesScreen()) },
                     R.string.settings_badges to { push(BadgesScreen()) },
+                    R.string.settings_system to { push(SystemScreen()) },
                     R.string.settings_theme to { push(ThemeScreen()) },
                     R.string.settings_background to { push(BackgroundScreen()) },
                     R.string.settings_appearance to { push(AppearanceScreen()) },
@@ -923,6 +936,159 @@ class SettingsActivity : ThemedActivity() {
 
         private fun edit(transform: (Background) -> Background) {
             settings.update { it.copy(theme = it.theme.copy(background = transform(it.theme.background))) }
+        }
+    }
+
+    /** Which lines sit with the app list, and on which side of it. */
+    private inner class InfoLinesScreen : Screen(ScreenId.INFO_LINES, R.string.settings_info_lines) {
+        private lateinit var adapter: RowAdapter
+        private val rows = mutableListOf<Row>()
+        private val taps = mutableListOf<() -> Unit>()
+
+        override fun createView(): View {
+            adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
+            refresh()
+            return list(adapter, onClick = { position -> taps.getOrNull(position)?.invoke() })
+        }
+
+        override fun refresh() {
+            rows.clear()
+            taps.clear()
+            val config = settings.settings.homeInfo
+            for ((id, label) in INFO_LINES) {
+                val line = config.line(id)
+                val needsAccess = id == InfoLineId.SCREEN_TIME && !Grants.usageAccess.isGranted(this@SettingsActivity)
+                add(
+                    Row(
+                        getString(label),
+                        if (needsAccess) getString(R.string.screen_time_needs_access) else null,
+                        checked = line.enabled,
+                    ),
+                ) {
+                    if (needsAccess && !line.enabled) {
+                        push(GrantScreen(ConsentKind.USAGE_ACCESS.ordinal))
+                    } else {
+                        settings.update {
+                            it.copy(homeInfo = it.homeInfo.withLine(id, line.copy(enabled = !line.enabled)))
+                        }
+                    }
+                }
+            }
+            val above = config.position == InfoPosition.ABOVE
+            add(
+                Row(
+                    getString(R.string.info_position),
+                    getString(if (above) R.string.info_above else R.string.info_below),
+                ),
+            ) {
+                settings.update {
+                    val next = if (above) InfoPosition.BELOW else InfoPosition.ABOVE
+                    it.copy(homeInfo = it.homeInfo.copy(position = next))
+                }
+            }
+            add(Row(getString(R.string.info_bind_hint), isHeader = true))
+            adapter.rows = rows.toList()
+            adapter.notifyDataSetChanged()
+        }
+
+        private fun add(
+            row: Row,
+            tap: () -> Unit = {},
+        ) {
+            rows += row
+            taps += tap
+        }
+    }
+
+    /**
+     * The three special accesses that are not notification badges: the accessibility service six
+     * gesture actions need, the device administrator that can lock the screen instead, and the
+     * usage access behind screen time. Each one is off until its own disclosure has been read.
+     */
+    private inner class SystemScreen : Screen(ScreenId.SYSTEM, R.string.settings_system) {
+        private lateinit var adapter: RowAdapter
+        private val rows = mutableListOf<Row>()
+        private val taps = mutableListOf<() -> Unit>()
+
+        override fun createView(): View {
+            adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
+            refresh()
+            return list(adapter, onClick = { position -> taps.getOrNull(position)?.invoke() })
+        }
+
+        override fun refresh() {
+            rows.clear()
+            taps.clear()
+            val accessibility = Grants.accessibility.isGranted(this@SettingsActivity)
+            add(
+                Row(
+                    getString(R.string.system_accessibility),
+                    getString(
+                        if (accessibility) R.string.system_accessibility_on else R.string.system_accessibility_off,
+                    ),
+                    checked = accessibility,
+                ),
+            ) { toggle(accessibility, Grants.accessibility) }
+
+            val admin = Grants.deviceAdmin.isGranted(this@SettingsActivity)
+            add(
+                Row(
+                    getString(R.string.system_admin),
+                    getString(if (admin) R.string.system_admin_on else R.string.system_admin_off),
+                    checked = admin,
+                ),
+            ) {
+                if (admin) {
+                    DeviceAdminLock.remove(this@SettingsActivity)
+                    toast(getString(R.string.grant_admin_removed))
+                    refresh()
+                } else {
+                    push(GrantScreen(ConsentKind.DEVICE_ADMIN.ordinal))
+                }
+            }
+
+            val usage = Grants.usageAccess.isGranted(this@SettingsActivity)
+            add(
+                Row(
+                    getString(R.string.system_usage),
+                    getString(if (usage) R.string.system_usage_on else R.string.system_usage_off),
+                    checked = usage,
+                ),
+            ) { toggle(usage, Grants.usageAccess) }
+
+            if (atomicApp.systemActions.shadeWithoutAccessibility) {
+                add(Row(getString(R.string.system_shade_free), isHeader = true))
+            }
+            adapter.rows = rows.toList()
+            adapter.notifyDataSetChanged()
+        }
+
+        /** Granting is a disclosure then Settings; taking it away is Settings alone, and theirs to do. */
+        private fun toggle(
+            granted: Boolean,
+            spec: io.github.subhaneetshrestha.atomic.settings.grant.GrantSpec,
+        ) {
+            if (!granted) {
+                push(GrantScreen(spec.kind.ordinal))
+                return
+            }
+            for (intent in spec.intents(this@SettingsActivity)) {
+                try {
+                    startActivity(intent)
+                    return
+                } catch (e: ActivityNotFoundException) {
+                    Logs.w(TAG, "no activity for ${intent.action}", e)
+                }
+            }
+            toast(getString(R.string.grant_no_settings))
+        }
+
+        private fun add(
+            row: Row,
+            tap: () -> Unit = {},
+        ) {
+            rows += row
+            taps += tap
         }
     }
 
@@ -1582,8 +1748,8 @@ class SettingsActivity : ThemedActivity() {
             if (!handedOver) return
             handedOver = false
             if (spec.isGranted(this@SettingsActivity)) {
-                toast(getString(R.string.grant_granted))
-                popTo(ScreenId.BADGES)
+                toast(getString(spec.grantedRes))
+                pop()
                 return
             }
             toast(getString(R.string.grant_not_granted))
@@ -1729,6 +1895,14 @@ class SettingsActivity : ThemedActivity() {
             )
 
         val DIMS = listOf(0, 15, 25, 35, 50, 65, 80)
+
+        val INFO_LINES =
+            listOf(
+                InfoLineId.CLOCK to R.string.info_clock,
+                InfoLineId.DATE to R.string.info_date,
+                InfoLineId.BATTERY to R.string.info_battery,
+                InfoLineId.SCREEN_TIME to R.string.info_screen_time,
+            )
 
         val FAMILIES = listOf("sans-serif", "serif", "monospace", "sans-serif-condensed", "cursive")
 

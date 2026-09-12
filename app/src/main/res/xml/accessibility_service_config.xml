@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The narrowest configuration an accessibility service can have: no event types, so Android
+    delivers nothing; no window content, so nothing on screen can be read; and scoped to this app's
+    own package, so even that nothing is only ours. The service exists to perform the global
+    actions a user bound to a gesture, and says so in its description.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/accessibility_description"
+    android:isAccessibilityTool="false"
+    android:notificationTimeout="0"
+    android:packageNames="io.github.subhaneetshrestha.atomic"
+    android:summary="@string/accessibility_summary" />

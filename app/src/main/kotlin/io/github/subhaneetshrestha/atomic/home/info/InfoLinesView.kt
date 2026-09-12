@@ -10,6 +10,7 @@ import android.widget.LinearLayout
 import android.widget.TextClock
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import io.github.subhaneetshrestha.atomic.R
 import io.github.subhaneetshrestha.atomic.core.theme.Action
 import io.github.subhaneetshrestha.atomic.core.theme.BindingSurface
 import io.github.subhaneetshrestha.atomic.core.theme.HomeInfoConfig
@@ -18,6 +19,7 @@ import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.core.theme.Theme
 import io.github.subhaneetshrestha.atomic.home.ThemeApplier
 import io.github.subhaneetshrestha.atomic.settings.HomeSettings
+import io.github.subhaneetshrestha.atomic.util.Threads
 import java.time.Duration
 import java.time.LocalDate
 import java.time.ZonedDateTime
@@ -37,6 +39,7 @@ class InfoLinesView(
     private val clock = TextClock(context)
     private val date = TextView(context)
     private val battery = TextView(context)
+    private val screenTime = TextView(context)
 
     private var config = HomeInfoConfig()
     private var batteryLevel = -1
@@ -50,6 +53,7 @@ class InfoLinesView(
                 intent: Intent,
             ) = onBattery(intent)
         }
+    private val screenTimeTick = Runnable { refreshScreenTime() }
     private val midnightTick =
         Runnable {
             refreshDate()
@@ -62,6 +66,7 @@ class InfoLinesView(
             clock,
             date,
             battery,
+            screenTime,
         )) {
             addView(line, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         }
@@ -79,17 +84,28 @@ class InfoLinesView(
         applier.applyText(clock, view.font, sizes.clockSp, colors.text, gravity, maxFontScale = CLOCK_MAX_FONT_SCALE)
         applier.applyText(date, view.font, sizes.infoSp, colors.textSecondary, gravity)
         applier.applyText(battery, view.font, sizes.infoSp, colors.textSecondary, gravity)
+        applier.applyText(screenTime, view.font, sizes.infoSp, colors.textSecondary, gravity)
         clock.format12Hour = config.clock.format
         clock.format24Hour = config.clock.format
         clock.visibility = if (config.clock.enabled) VISIBLE else GONE
         date.visibility = if (config.date.enabled) VISIBLE else GONE
         battery.visibility = if (config.battery.enabled) VISIBLE else GONE
+        screenTime.visibility = if (config.screenTime.enabled) VISIBLE else GONE
         wire(clock, InfoLineId.CLOCK, config)
         wire(date, InfoLineId.DATE, config)
         wire(battery, InfoLineId.BATTERY, config)
-        visibility = if (config.clock.enabled || config.date.enabled || config.battery.enabled) VISIBLE else GONE
+        wire(screenTime, InfoLineId.SCREEN_TIME, config)
+        visibility =
+            if (config.clock.enabled || config.date.enabled || config.battery.enabled ||
+                config.screenTime.enabled
+            ) {
+                VISIBLE
+            } else {
+                GONE
+            }
         refreshDate()
         refreshBattery()
+        refreshScreenTime()
     }
 
     /**
@@ -133,6 +149,7 @@ class InfoLinesView(
         sticky?.let(::onBattery)
         refreshDate()
         scheduleMidnight()
+        refreshScreenTime()
     }
 
     fun onStop() {
@@ -140,6 +157,40 @@ class InfoLinesView(
         started = false
         context.unregisterReceiver(batteryReceiver)
         removeCallbacks(midnightTick)
+        removeCallbacks(screenTimeTick)
+    }
+
+    /**
+     * Screen time is worked out from Android's record of every app that came to the front today,
+     * which is a question worth asking off the main thread, and worth asking again while the
+     * launcher is on screen because it keeps growing.
+     */
+    private fun refreshScreenTime() {
+        removeCallbacks(screenTimeTick)
+        if (!config.screenTime.enabled) return
+        val appContext = context.applicationContext
+        Threads.io.post {
+            val total = UsageAccess.todayMillis(appContext)
+            Threads.main.post {
+                if (!config.screenTime.enabled) return@post
+                screenTime.text =
+                    when {
+                        total == null -> {
+                            context.getString(R.string.screen_time_needs_access)
+                        }
+
+                        total >= HOUR_MS -> {
+                            val minutes = (total / MINUTE_MS).toInt()
+                            context.getString(R.string.screen_time_hours, minutes / 60, minutes % 60)
+                        }
+
+                        else -> {
+                            context.getString(R.string.screen_time_minutes, (total / MINUTE_MS).toInt())
+                        }
+                    }
+                if (started) postDelayed(screenTimeTick, MINUTE_MS)
+            }
+        }
     }
 
     private fun onBattery(intent: Intent) {
@@ -173,6 +224,10 @@ class InfoLinesView(
 
     private companion object {
         const val MIDNIGHT_SLACK_MS = 500L
+
+        const val MINUTE_MS = 60_000L
+
+        const val HOUR_MS = 60 * MINUTE_MS
 
         /** The clock is decoration: it follows the font size setting only up to this factor. */
         const val CLOCK_MAX_FONT_SCALE = 1.3f
