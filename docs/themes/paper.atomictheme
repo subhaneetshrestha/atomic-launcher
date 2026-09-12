@@ -46,5 +46,21 @@
     "scale": 0.62,
     "background": "auto",
     "text": "auto"
+  },
+  "background": {
+    "mode": "color",
+    "gradient": {
+      "from": "#FF101820",
+      "to": "#FF000000",
+      "angle": 0
+    },
+    "collection": {
+      "url": "",
+      "intervalMinutes": 360,
+      "unmeteredOnly": true,
+      "shuffle": true
+    },
+    "dim": 0.35,
+    "autoTextColor": true
   }
 }

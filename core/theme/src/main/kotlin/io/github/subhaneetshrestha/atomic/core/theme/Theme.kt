@@ -18,6 +18,7 @@ data class Theme(
     val typography: Typography = Typography(),
     val layout: Layout = Layout(),
     val badge: Badge = Badge(),
+    val background: Background = Background(),
 )
 
 @Serializable

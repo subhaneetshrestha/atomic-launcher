@@ -1,5 +1,7 @@
 package io.github.subhaneetshrestha.atomic.core.theme
 
+import io.github.subhaneetshrestha.atomic.core.collections.UrlRules
+
 /**
  * Second pass after typed decoding: values are pulled into their allowed ranges and every
  * correction is recorded with the path of the field, so an import screen can show what changed.
@@ -298,6 +300,58 @@ internal class Sanitizer {
                     rowGapDp = clamp(layout.rowGapDp, 0, 64, "${prefix}layout.rowGapDp"),
                 ),
             badge = badge(theme.badge, "${prefix}badge"),
+            background = background(theme.background, "${prefix}background"),
+        )
+    }
+
+    private fun background(
+        background: Background,
+        path: String,
+    ): Background {
+        val gradient = background.gradient
+        val defaults = Gradient()
+        return background.copy(
+            dim = clamp(background.dim, 0f, 1f, "$path.dim"),
+            gradient =
+                gradient.copy(
+                    from = color(gradient.from, isText = false, "$path.gradient.from") ?: defaults.from,
+                    to = color(gradient.to, isText = false, "$path.gradient.to") ?: defaults.to,
+                    angle = angle(gradient.angle, "$path.gradient.angle"),
+                ),
+            collection = collection(background.collection, "$path.collection"),
+        )
+    }
+
+    /** Any number of degrees names a direction; it is simply turned back into one full circle. */
+    private fun angle(
+        angle: Int,
+        path: String,
+    ): Int {
+        val turned = ((angle % FULL_CIRCLE) + FULL_CIRCLE) % FULL_CIRCLE
+        if (turned != angle) warnings += Warning(path, "$angle degrees is the same direction as $turned")
+        return turned
+    }
+
+    /**
+     * An address the fetcher would refuse is cleared rather than kept: a theme that arrived with
+     * an http:// collection must not leave a setting behind that looks like it is working.
+     */
+    private fun collection(
+        config: CollectionConfig,
+        path: String,
+    ): CollectionConfig {
+        val url = config.url.trim()
+        val problem = if (url.isEmpty()) null else UrlRules.problemWith(url)
+        if (problem != null) warnings += Warning("$path.url", "the address $problem; no images will be fetched")
+        return config.copy(
+            url = if (problem == null) url else "",
+            intervalMinutes =
+                clamp(
+                    config.intervalMinutes,
+                    CollectionConfig.MIN_INTERVAL_MINUTES,
+                    CollectionConfig.MAX_INTERVAL_MINUTES,
+                    "$path.intervalMinutes",
+                ),
         )
     }
 
@@ -397,6 +451,8 @@ private val COMPONENT = Regex("^[A-Za-z][\\w.]*/[\\w.$]+$")
 
 /** A package name: no whitespace, dot-separated. */
 private val PACKAGE = Regex("^[A-Za-z][\\w.]*$")
+
+private const val FULL_CIRCLE = 360
 
 /** A badge shorter than a third of the name is a speck; one taller than the name is not a badge. */
 private const val BADGE_SCALE_MIN = 0.3f

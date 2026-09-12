@@ -11,6 +11,8 @@ kotlin {
 
 dependencies {
     implementation(libs.kotlinx.serialization.json)
+    // The rules an image address must pass are the fetcher's, and are applied when a theme is read.
+    implementation(project(":core:collections"))
 
     testImplementation(libs.kotlin.test)
     testImplementation(platform(libs.junit.bom))
