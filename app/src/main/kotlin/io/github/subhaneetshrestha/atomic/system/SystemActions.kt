@@ -34,8 +34,15 @@ object SystemActions {
 
     fun minSdk(id: BuiltinId): Int = MIN_SDK[id] ?: 0
 
-    /** Everything this Android version can be asked to do, once the service is running. */
+    /** Everything this Android version can be asked of the service, once it is running. */
     fun supported(sdkInt: Int): Set<BuiltinId> = ACTIONS.keys.filter { sdkInt >= minSdk(it) }.toSet()
+
+    /**
+     * Everything the launcher can offer at all. Locking is here on every version, including the
+     * ones whose accessibility service cannot do it: a device administrator can, and below
+     * Android 9 that is the only way. Offering it as "not in this version" there would be wrong.
+     */
+    fun offered(sdkInt: Int): Set<BuiltinId> = supported(sdkInt) + BuiltinId.LOCK_SCREEN
 
     fun isFresh(
         issuedAt: Long,

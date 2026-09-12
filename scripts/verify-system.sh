@@ -87,12 +87,33 @@ service_process() { sh ps -A 2>/dev/null | grep -c "$PKG:system" || true; }
 service_log() { $ADB logcat -d 2>/dev/null | tr -d '\r' | grep -c "SystemActionsService.*$1" || true; }
 asleep() { sh dumpsys power | grep -m1 -o 'mWakefulness=[A-Za-z]*' | cut -d= -f2; }
 wake() { sh input keyevent KEYCODE_WAKEUP >/dev/null; sh wm dismiss-keyguard >/dev/null 2>&1; wait_s 2; home; }
-# Binds an action to double tap through the settings screens, the way a person would.
-bind_double_tap() {
-  open_screen "Gestures" || return 1
-  find_and_tap "Double tap" || return 1
-  find_and_tap "$1" || return 1
+# Puts a binding, or a line, into the document directly. Driving the settings screens for this is
+# what the Phase 3 and Phase 7 harnesses are for; here it is scaffolding, and scaffolding that
+# taps its way through four screens fails for reasons that have nothing to do with what is tested.
+edit_document() {
+  sh run-as "$PKG" cat files/settings.json > "$TMP/settings.json"
+  [ -s "$TMP/settings.json" ] || return 1
+  python3 - "$TMP/settings.json" "$@" <<'EDIT'
+import json, sys
+path = sys.argv[1]
+document = json.load(open(path))
+for change in sys.argv[2:]:
+    key, value = change.split("=", 1)
+    if key == "double_tap":
+        document.setdefault("gestures", {}).setdefault("bindings", {})["double_tap"] = {
+            "type": "builtin",
+            "id": value,
+        }
+    elif key == "screen_time":
+        document.setdefault("homeInfo", {}).setdefault("screenTime", {})["enabled"] = value == "true"
+json.dump(document, open(path, "w"), indent=2)
+EDIT
+  $ADB push "$TMP/settings.json" /data/local/tmp/settings.json >/dev/null 2>&1
+  $ADB shell "run-as $PKG sh -c 'cat /data/local/tmp/settings.json > files/settings.json'" >/dev/null 2>&1
+  # The running app holds the old document in memory, so it has to be started again to read this.
+  sh am force-stop "$PKG" >/dev/null
   wait_s 1
+  home
 }
 
 api=$(sh getprop ro.build.version.sdk)
@@ -110,13 +131,20 @@ $ADB logcat -c >/dev/null 2>&1
 home; tap_text "Skip" >/dev/null 2>&1 || true; wait_s 1
 
 # 1. The service is declared for the system alone, in a process of its own, and told nothing.
-manifest=$("$SDK"/build-tools/*/aapt2 dump xmltree --file AndroidManifest.xml "$APK" 2>/dev/null)
-grep -q 'BIND_ACCESSIBILITY_SERVICE' <<<"$manifest" && ok "the service is guarded by BIND_ACCESSIBILITY_SERVICE" ||
-  ko "the service is guarded by BIND_ACCESSIBILITY_SERVICE"
-grep -q ':system' <<<"$manifest" && ok "and runs in a process of its own" || ko "and runs in a process of its own"
-config=$(sh dumpsys package "$PKG" | grep -c 'accessibilityservice' || true)
-grep -q 'BIND_DEVICE_ADMIN' <<<"$manifest" && ok "the administrator is guarded by BIND_DEVICE_ADMIN" ||
-  ko "the administrator is guarded by BIND_DEVICE_ADMIN"
+# Read from the compiled manifest: API 26's dumpsys does not print a component's permission.
+aapt=$(ls "$SDK"/build-tools/*/aapt2 2>/dev/null | tail -1)
+if [ -n "$aapt" ]; then
+  manifest=$("$aapt" dump xmltree --file AndroidManifest.xml "$APK" 2>/dev/null)
+  grep -q 'BIND_ACCESSIBILITY_SERVICE' <<<"$manifest" &&
+    ok "the service is guarded by BIND_ACCESSIBILITY_SERVICE" ||
+    ko "the service is guarded by BIND_ACCESSIBILITY_SERVICE"
+  grep -q '":system"' <<<"$manifest" && ok "and runs in a process of its own" ||
+    ko "and runs in a process of its own"
+  grep -q 'BIND_DEVICE_ADMIN' <<<"$manifest" && ok "the administrator is guarded by BIND_DEVICE_ADMIN" ||
+    ko "the administrator is guarded by BIND_DEVICE_ADMIN"
+else
+  info "no aapt2 found; skipped the manifest guard checks"
+fi
 
 # 2. Nothing is on out of the box, and the launcher says so.
 open_screen "Gestures that need permission" || ko "opening the permission screen"
@@ -143,14 +171,16 @@ enable_service
 open_screen "Gestures that need permission" || ko "reopening the permission screen"
 contains_text "locking and screenshots" "$(dump)" && ok "the launcher sees the service is on" ||
   ko "the launcher sees the service is on"
-bind_double_tap "Recents" || ko "binding recents to double tap"
+open_screen "Gestures" || ko "opening the gestures screen"
+find_and_tap "Double tap" || ko "opening the action picker"
+find_and_tap "Recent apps" || ko "choosing recent apps"
 grep -q '"recents"' <<<"$(settings_json)" && ok "the action can be chosen now that the service exists" ||
   ko "the action can be chosen now that the service exists"
 
 # 5. Performing it reaches the service, in its own process, and it does as it is told.
 $ADB logcat -c >/dev/null 2>&1
 home
-double_tap $((W / 2)) $((H / 8))
+double_tap $(empty_spot)
 wait_s 2
 [ "$(service_log 'performed=true')" -ge 1 ] && ok "the gesture reaches the service and it performs" ||
   ko "the gesture reaches the service and it performs ($($ADB logcat -d | grep -c SystemActionsService) lines)"
@@ -173,14 +203,16 @@ fi
 
 # 7. Locking the screen: by the service from Android 9, by the administrator below it.
 $ADB logcat -c >/dev/null 2>&1
-bind_double_tap "Lock the screen" || ko "binding the lock to double tap"
+edit_document "double_tap=lock_screen" || ko "binding the lock to double tap"
+grep -q '"lock_screen"' <<<"$(settings_json)" && ok "the lock is bound to double tap" ||
+  ko "the lock is bound to double tap"
 if [ "$api" -lt 28 ]; then
   sh dpm set-active-admin --user 0 "$ADMIN" >/dev/null 2>&1
   open_screen "Gestures that need permission" || true
   contains_text "a gesture can lock" "$(dump)" && ok "the administrator is active" || ko "the administrator is active"
 fi
 home
-double_tap $((W / 2)) $((H / 8))
+double_tap $(empty_spot)
 wait_s 3
 state=$(asleep)
 [ "$state" = "Asleep" ] || [ "$state" = "Dozing" ] && ok "the gesture locks the screen ($state)" ||
@@ -189,26 +221,23 @@ wake
 
 # 8. Screen time appears once usage access is given, and says so while it is not.
 open_screen "Lines above the list" || ko "opening the info lines"
-tap_text "Screen time" >/dev/null 2>&1
 ui=$(dump)
-contains_text "needs usage access" "$ui" && ok "screen time says what it needs" || ko "screen time says what it needs"
-tap_text "Not now" >/dev/null 2>&1
-sh appops set "$PKG" android:get_usage_stats allow >/dev/null 2>&1
-open_screen "Lines above the list" || ko "reopening the info lines"
-tap_text "Screen time" >/dev/null 2>&1
+has_text "Screen time" "$ui" && ok "the info lines can be chosen from" || ko "the info lines can be chosen from"
+contains_text "needs usage access" "$ui" && ok "and screen time says what it needs" ||
+  ko "and screen time says what it needs"
+edit_document "screen_time=true" || ko "turning the line on"
 wait_s 2
-grep -q '"screenTime":{"enabled":true' <<<"$(settings_json)" && ok "the line can be turned on" ||
-  ko "the line can be turned on"
-home
-wait_s 3
+contains_text "needs usage access" "$(dump)" && ok "the line itself says so on the home screen" ||
+  ko "the line itself says so on the home screen"
+sh appops set "$PKG" android:get_usage_stats allow >/dev/null 2>&1
+sh am force-stop "$PKG" >/dev/null; wait_s 1; home; wait_s 3
 ui=$(dump)
-contains_text "min|[0-9]h [0-9]" "$ui" && ok "and the home screen shows a time" ||
-  ko "and the home screen shows a time"
+contains_text "min|[0-9]h [0-9]" "$ui" && ok "with usage access it shows a time" ||
+  ko "with usage access it shows a time"
 sh appops set "$PKG" android:get_usage_stats default >/dev/null 2>&1
-home
-wait_s 3
-contains_text "needs usage access" "$(dump)" && ok "taking the access away says so on the home screen" ||
-  ko "taking the access away says so on the home screen"
+sh am force-stop "$PKG" >/dev/null; wait_s 1; home; wait_s 3
+contains_text "needs usage access" "$(dump)" && ok "taking the access away says so again" ||
+  ko "taking the access away says so again"
 
 # 9. An app's own shortcuts, which only the home app may read.
 home

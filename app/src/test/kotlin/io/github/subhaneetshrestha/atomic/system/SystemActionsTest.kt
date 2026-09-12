@@ -32,6 +32,14 @@ class SystemActionsTest {
     }
 
     @Test
+    fun `locking is offered everywhere, because an administrator can do it where the service cannot`() {
+        assertTrue(BuiltinId.LOCK_SCREEN in SystemActions.offered(26), "Android 8 locks with a device administrator")
+        assertTrue(BuiltinId.LOCK_SCREEN !in SystemActions.supported(26), "but not through the service")
+        assertTrue(BuiltinId.SCREENSHOT !in SystemActions.offered(26), "a screenshot has no second route")
+        assertEquals(SystemActions.supported(28), SystemActions.offered(28), "from Android 9 they are the same")
+    }
+
+    @Test
     fun `an instruction the user has moved on from is dropped`() {
         val now = 10_000L
         assertTrue(SystemActions.isFresh(now, now))

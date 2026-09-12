@@ -20,7 +20,7 @@ class AndroidSystemActions(
 
     override val isDeviceAdminActive: Boolean get() = DeviceAdminLock.isActive(appContext)
 
-    override val supported: Set<BuiltinId> = SystemActions.supported(Build.VERSION.SDK_INT)
+    override val supported: Set<BuiltinId> = SystemActions.offered(Build.VERSION.SDK_INT)
 
     /** Whether the shade can be opened with nothing granted at all. */
     override val shadeWithoutAccessibility: Boolean get() = StatusBarShade.isAvailable
@@ -30,7 +30,7 @@ class AndroidSystemActions(
             return DeviceAdminLock.lock(appContext)
         }
         if (id == BuiltinId.NOTIFICATION_SHADE && !isEnabled) return StatusBarShade.expand(appContext)
-        if (!isEnabled || id !in supported) return false
+        if (!isEnabled || id !in SystemActions.supported(Build.VERSION.SDK_INT)) return false
         return try {
             appContext.startService(SystemActionsService.intent(appContext, id)) != null
         } catch (e: IllegalStateException) {
