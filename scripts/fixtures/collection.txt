@@ -1,0 +1,3 @@
+# Two solid images used by scripts/verify-background.sh: one bright, one dark.
+https://raw.githubusercontent.com/subhaneetshrestha/atomic-launcher/main/scripts/fixtures/white.png
+https://raw.githubusercontent.com/subhaneetshrestha/atomic-launcher/main/scripts/fixtures/black.png
