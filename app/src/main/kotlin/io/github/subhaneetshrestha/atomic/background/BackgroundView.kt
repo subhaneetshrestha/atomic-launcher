@@ -12,6 +12,7 @@ import android.graphics.Shader
 import android.view.View
 import io.github.subhaneetshrestha.atomic.core.theme.Background
 import io.github.subhaneetshrestha.atomic.core.theme.BackgroundMode
+import io.github.subhaneetshrestha.atomic.util.Logs
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
@@ -73,9 +74,14 @@ class BackgroundView(
     ) {
         if (bitmap === image) return
         animator?.cancel()
-        outgoing = if (animate) image else null
+        releaseOutgoing()
+        // Fading to nothing is not a fade: there is no second image to come through, and the
+        // pixels have to go now rather than when a window that may not be on screen draws again.
+        val fading = animate && bitmap != null
+        outgoing = if (fading) image else null
+        if (!fading) image?.releasePixels()
         image = bitmap
-        if (!animate || outgoing == null) {
+        if (!fading || outgoing == null) {
             fade = 1f
             invalidate()
             return
@@ -91,7 +97,7 @@ class BackgroundView(
                 addListener(
                     object : android.animation.AnimatorListenerAdapter() {
                         override fun onAnimationEnd(animation: android.animation.Animator) {
-                            outgoing = null
+                            releaseOutgoing()
                             invalidate()
                         }
                     },
@@ -153,6 +159,26 @@ class BackgroundView(
         )
     }
 
+    /**
+     * The pixels belong to the view once they are handed over: by the time an image becomes the
+     * outgoing one, the controller is already holding its replacement. Letting go of the reference
+     * is not enough on Android 8, where a bitmap is native memory freed only when the object is
+     * collected — six rotations would be carrying six screenfuls until something forced that.
+     */
+    private fun releaseOutgoing() {
+        outgoing?.releasePixels()
+        outgoing = null
+    }
+
+    /** A hardware bitmap belongs to the graphics driver, which frees it without being asked. */
+    private fun Bitmap.releasePixels() {
+        if (isRecycled || config == Bitmap.Config.HARDWARE) return
+        recycle()
+        // Android 8 holds a bitmap in native memory that the allocator does not hand back to the
+        // system when it is freed, so this line is the only way to see from outside that it was.
+        Logs.d(TAG) { "background pixels released" }
+    }
+
     /** Centre crop: scaled to cover the view, with the overflow split evenly on both sides. */
     private fun drawCovering(
         canvas: Canvas,
@@ -178,5 +204,6 @@ class BackgroundView(
     private companion object {
         const val CROSSFADE_MS = 250L
         const val OPAQUE = 255
+        const val TAG = "BackgroundView"
     }
 }

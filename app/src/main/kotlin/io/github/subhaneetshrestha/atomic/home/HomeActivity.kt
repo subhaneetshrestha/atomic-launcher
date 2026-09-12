@@ -167,8 +167,16 @@ class HomeActivity :
                 }
             },
         )
+        // Unlike the others, this listener lives as long as the activity: a system short of memory
+        // trims the launcher precisely when it is not on screen, and the image has to go then.
+        atomicApp.background.addListener(backgroundListener)
         render()
         offerSetup()
+    }
+
+    override fun onDestroy() {
+        atomicApp.background.removeListener(backgroundListener)
+        super.onDestroy()
     }
 
     private fun offerSetup() {
@@ -182,7 +190,6 @@ class HomeActivity :
         repository.addListener(snapshotListener)
         settings.addDocumentListener(documentListener)
         atomicApp.badges.store.addListener(badgeListener)
-        atomicApp.background.addListener(backgroundListener)
         infoLines.onStart()
         render()
     }
@@ -205,7 +212,6 @@ class HomeActivity :
         repository.removeListener(snapshotListener)
         settings.removeDocumentListener(documentListener)
         atomicApp.badges.store.removeListener(badgeListener)
-        atomicApp.background.removeListener(backgroundListener)
         infoLines.onStop()
         settings.flush()
         super.onStop()
