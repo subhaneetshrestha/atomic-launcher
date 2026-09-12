@@ -11,7 +11,7 @@
   "colors": {
     "background": "#FFF6F1E7",
     "text": "#FF1B1B1B",
-    "textSecondary": "#991B1B1B",
+    "textSecondary": "#B31B1B1B",
     "accent": "#FF1B1B1B"
   },
   "darkColors": {

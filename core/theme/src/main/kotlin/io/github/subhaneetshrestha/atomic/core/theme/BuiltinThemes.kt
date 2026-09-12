@@ -29,7 +29,9 @@ object BuiltinThemes {
                 Colors(
                     background = "#FFF6F1E7",
                     text = "#FF1B1B1B",
-                    textSecondary = "#991B1B1B",
+                    // Dark ink on warm paper needs more of itself than white on black does: at the
+                    // 60 % the other themes use, the info lines come to 4.4:1, just under readable.
+                    textSecondary = "#B31B1B1B",
                     accent = "#FF1B1B1B",
                 ),
             darkColors =

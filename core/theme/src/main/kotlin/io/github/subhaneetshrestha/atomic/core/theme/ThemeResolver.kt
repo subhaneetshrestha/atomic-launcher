@@ -94,6 +94,35 @@ class ThemeResolver(
             return (alpha shl 24) or rgb
         }
 
+        /**
+         * The WCAG contrast ratio between two opaque colours: 1 when they are the same, 21 for
+         * black on white. Text smaller than 18 sp needs 4.5 to be readable by everybody.
+         */
+        fun contrastRatio(
+            a: Int,
+            b: Int,
+        ): Double {
+            val one = relativeLuminance(a) + 0.05
+            val other = relativeLuminance(b) + 0.05
+            return if (one > other) one / other else other / one
+        }
+
+        /** [foreground] laid over [background] at its own alpha, as the opaque colour that results. */
+        fun composite(
+            foreground: Int,
+            background: Int,
+        ): Int {
+            val alpha = ((foreground ushr 24) and 0xFF) / 255.0
+            if (alpha >= 1.0) return foreground
+
+            fun channel(shift: Int): Int {
+                val front = (foreground shr shift) and 0xFF
+                val behind = (background shr shift) and 0xFF
+                return (front * alpha + behind * (1 - alpha)).toInt().coerceIn(0, 255)
+            }
+            return (0xFF shl 24) or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
+        }
+
         fun relativeLuminance(argb: Int): Double {
             fun channel(shift: Int): Double {
                 val s = ((argb shr shift) and 0xFF) / 255.0
