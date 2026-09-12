@@ -28,4 +28,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "atomic-launcher"
 
-include(":app", ":core:theme", ":core:search")
+include(":app", ":core:theme", ":core:search", ":core:collections")
