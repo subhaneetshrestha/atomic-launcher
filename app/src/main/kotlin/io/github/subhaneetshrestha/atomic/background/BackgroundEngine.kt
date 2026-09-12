@@ -145,7 +145,7 @@ class BackgroundEngine(
             }
 
             is ImageFetcher.Outcome.Index -> {
-                val kind = SourceDetector.detect(fetched.contentType, fetched.body.take(SNIFF).toByteArray())
+                val kind = SourceDetector.detect(fetched.contentType, fetched.head)
                 val parsed = CollectionParser.parse(kind, fetched.body, fetched.url)
                 if (parsed.warnings.isNotEmpty()) Logs.d(TAG) { "collection: ${parsed.warnings}" }
                 if (parsed.isEmpty) {
@@ -185,9 +185,6 @@ class BackgroundEngine(
 
     private companion object {
         const val MINUTE_MS = 60_000L
-
-        /** Characters of the body [SourceDetector] needs; a signature is in the first few bytes. */
-        const val SNIFF = SourceDetector.SNIFF_BYTES
 
         const val TAG = "BackgroundEngine"
     }

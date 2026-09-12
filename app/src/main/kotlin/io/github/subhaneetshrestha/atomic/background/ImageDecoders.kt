@@ -82,9 +82,10 @@ object ImageDecoders {
                 decoder.setTargetSize(size.first, size.second)
                 decoder.allocator =
                     if (hardware) ImageDecoder.ALLOCATOR_HARDWARE else ImageDecoder.ALLOCATOR_SOFTWARE
-                // A file that is almost an image is still worth drawing; the alternative is nothing.
-                decoder.isUnpremultipliedRequired = false
-                decoder.setOnPartialImageListener { true }
+                // Half an image is not worth showing on a home screen, and a file that arrived
+                // whole and still will not decode is not an image at all. A download that stopped
+                // short never reaches here: the fetcher checks the length against the promise.
+                decoder.setOnPartialImageListener { false }
             }
         } catch (e: IOException) {
             Logs.w(TAG, "could not decode ${file.name}", e)

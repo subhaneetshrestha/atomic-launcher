@@ -1,5 +1,6 @@
 package io.github.subhaneetshrestha.atomic.background
 
+import io.github.subhaneetshrestha.atomic.core.collections.SourceDetector
 import io.github.subhaneetshrestha.atomic.core.collections.UrlRules
 import io.github.subhaneetshrestha.atomic.core.collections.Wallhaven
 import io.github.subhaneetshrestha.atomic.util.Logs
@@ -27,11 +28,17 @@ class ImageFetcher(
     sealed class Outcome {
         data class Index(
             val body: String,
+            /** The first bytes as they arrived: a signature does not survive being read as text. */
+            val head: ByteArray,
             val contentType: String?,
             val url: String,
             val etag: String?,
             val lastModified: String?,
-        ) : Outcome()
+        ) : Outcome() {
+            override fun equals(other: Any?): Boolean = this === other
+
+            override fun hashCode(): Int = System.identityHashCode(this)
+        }
 
         /** The document has not changed since the validators that were sent with the request. */
         data object Unchanged : Outcome()
@@ -68,6 +75,7 @@ class ImageFetcher(
                     ?: return Outcome.Failed("the list is larger than ${MAX_INDEX_BYTES / 1024} KiB", permanent = true)
             Outcome.Index(
                 body = String(bytes, Charsets.UTF_8),
+                head = bytes.copyOf(minOf(bytes.size, SourceDetector.SNIFF_BYTES)),
                 contentType = ok.connection.contentType,
                 url = ok.url,
                 etag = ok.connection.getHeaderField("ETag"),
@@ -102,6 +110,13 @@ class ImageFetcher(
                 written == 0L -> {
                     target.delete()
                     Outcome.Failed("the image was empty", permanent = true)
+                }
+
+                // Stopping short of the length the server promised is a broken connection, and
+                // will come right; half a file must never be marked as a bad address.
+                declared > 0 && written != declared -> {
+                    target.delete()
+                    Outcome.Failed("only $written bytes of $declared arrived", permanent = false)
                 }
 
                 else -> {

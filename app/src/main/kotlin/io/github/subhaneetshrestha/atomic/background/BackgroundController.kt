@@ -165,8 +165,8 @@ class BackgroundController(
         Threads.io.post {
             val state = store.readState()
             if (state.index?.sourceUrl != background.collection.url) {
-                // A different collection: what is on screen came from the old one.
-                store.writeState(BackgroundState())
+                // A different collection: what is on screen came from one the user has left.
+                store.forget()
                 Threads.main.post {
                     image = null
                     legibility = null

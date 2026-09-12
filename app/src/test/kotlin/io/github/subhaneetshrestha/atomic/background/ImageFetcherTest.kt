@@ -190,6 +190,27 @@ class ImageFetcherTest {
     }
 
     @Test
+    fun `a download that stops short of what was promised is the network, not the address`() {
+        serve("/half.jpg") {
+            it.responseHeaders.add("Content-Type", "image/jpeg")
+            it.sendResponseHeaders(200, 4096)
+            runCatching { it.responseBody.write(jpegHeader + ByteArray(1000)) }
+        }
+        val target = File(tempDir, "half.img")
+        val outcome = assertIs<ImageFetcher.Outcome.Failed>(fetcher.fetchImage(url("/half.jpg"), target))
+        assertFalse(outcome.permanent, "a broken connection must never blacklist a good address")
+        assertFalse(target.exists(), "half a file is not kept")
+    }
+
+    @Test
+    fun `the first bytes are kept as they arrived, so a signature survives`() {
+        val body = jpegHeader + ByteArray(64) { it.toByte() }
+        serve("/sniff") { it.send(200, body, "application/octet-stream") }
+        val outcome = assertIs<ImageFetcher.Outcome.Index>(fetcher.fetchIndex(url("/sniff")))
+        assertEquals(jpegHeader.toList(), outcome.head.take(4))
+    }
+
+    @Test
     fun `an empty answer is a failure, not an empty wallpaper`() {
         serve("/empty.jpg") { it.send(200, ByteArray(0), "image/jpeg") }
         val target = File(tempDir, "empty.img")
