@@ -45,65 +45,37 @@ settings_json() { sh run-as "$PKG" cat files/settings.json | tr -d ' \n'; }
 state_json() { sh run-as "$PKG" cat files/background/state.json | tr -d ' \n'; }
 open_background_settings() { home; hold_at $((W / 2)) $((H / 8)); scroll_to_tap "Background"; }
 
-# One pixel of the screen as "R G B". The screenshot is a PNG, which is unpacked here rather than
-# on the phone: adb is the only thing installed on every machine this might run on.
-pixel() {
-  $ADB exec-out screencap -p > "$TMP/shot.png" 2>/dev/null
-  python3 - "$TMP/shot.png" "$1" "$2" <<'PY'
-import sys, zlib, struct
-path, wanted_x, wanted_y = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+# What a band of the screen looks like, as "min median max" brightness. A screenshot is the only
+# way to see a colour: uiautomator reports what a view says, never how it is painted. The raw
+# screencap buffer is used rather than a PNG so that unpacking it needs nothing but python.
+shot() { $ADB exec-out screencap > "$TMP/shot.raw" 2>/dev/null; }
+band() {
+  python3 - "$TMP/shot.raw" "$1" "${2:-$1}" <<'SCAN'
+import sys, struct
+path, first, last = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
 data = open(path, 'rb').read()
-if data[:8] != b'\x89PNG\r\n\x1a\n':
+if len(data) < 16:
     print("0 0 0"); raise SystemExit
-pos, idat, w, h, colour = 8, b'', 0, 0, 6
-while pos < len(data) - 8:
-    length, typ = struct.unpack('>I4s', data[pos:pos + 8]); pos += 8
-    chunk = data[pos:pos + length]; pos += length + 4
-    if typ == b'IHDR':
-        w, h, _depth, colour = struct.unpack('>IIBB', chunk[:10])
-    elif typ == b'IDAT':
-        idat += chunk
-    elif typ == b'IEND':
-        break
-channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[colour]
-stride = w * channels
-raw = zlib.decompress(idat)
-prev = bytearray(stride)
-index = 0
-x = min(max(wanted_x, 0), w - 1)
-y = min(max(wanted_y, 0), h - 1)
-for row in range(h):
-    filt = raw[index]; index += 1
-    line = bytearray(raw[index:index + stride]); index += stride
-    if filt == 1:
-        for k in range(channels, stride):
-            line[k] = (line[k] + line[k - channels]) & 255
-    elif filt == 2:
-        for k in range(stride):
-            line[k] = (line[k] + prev[k]) & 255
-    elif filt == 3:
-        for k in range(stride):
-            left = line[k - channels] if k >= channels else 0
-            line[k] = (line[k] + ((left + prev[k]) >> 1)) & 255
-    elif filt == 4:
-        for k in range(stride):
-            a = line[k - channels] if k >= channels else 0
-            b = prev[k]
-            c = prev[k - channels] if k >= channels else 0
-            p = a + b - c
-            pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
-            line[k] = (line[k] + (a if pa <= pb and pa <= pc else (b if pb <= pc else c))) & 255
-    if row == y:
-        o = x * channels
-        print(line[o], line[o + 1] if channels > 2 else line[o], line[o + 2] if channels > 2 else line[o])
-        break
-    prev = line
-PY
+w, h, fmt = struct.unpack('<III', data[:12])
+header = 12 if w * h * 4 + 12 == len(data) else 16
+if w == 0 or w * h * 4 + header != len(data):
+    print("0 0 0"); raise SystemExit
+values = []
+for y in range(max(0, min(first, h - 1)), max(0, min(last, h - 1)) + 1):
+    row = header + y * w * 4
+    for x in range(0, w, 2):
+        o = row + x * 4
+        values.append((data[o] * 30 + data[o + 1] * 59 + data[o + 2] * 11) // 100)
+values.sort()
+print(values[0], values[len(values) // 2], values[-1])
+SCAN
 }
-brightness() { read -r r g b <<<"$1"; echo $(( (10#$r * 30 + 10#$g * 59 + 10#$b * 11) / 100 )); }
+band_of() { shot; band "$1" "${2:-$1}"; }
+median() { read -r lo mid hi <<<"$1"; echo "$mid"; }
+darkest() { read -r lo mid hi <<<"$1"; echo "$lo"; }
 # The window flags Android is actually drawing the home screen with.
-window_flags() { sh dumpsys window windows | grep -A4 "$PKG/.*HomeActivity" | grep -o 'fl=[^ ]*' | head -1; }
-meminfo() { sh dumpsys meminfo "$PKG" | grep -E "^\s+$1" | head -1 | awk '{print $2}'; }
+window_flags() { sh dumpsys window windows | grep -A12 "$PKG/.*HomeActivity" | grep -m1 'fl=' | sed 's/^ *//'; }
+meminfo() { sh dumpsys meminfo "$PKG" | sed -n '/App Summary/,/TOTAL SWAP/p' | grep -m1 "$1" | grep -oE '[0-9]+' | head -1; }
 
 api=$(sh getprop ro.build.version.sdk)
 read -r W H < <(sh wm size | awk -F'[ x]' '/Physical/{print $3, $4}')
@@ -118,8 +90,9 @@ home; tap_text "Skip" >/dev/null 2>&1 || true; wait_s 1
 
 # 1. Out of the box: the theme colour, nothing fetched, no job scheduled.
 home
-ink=$(pixel $((W / 2)) $((H / 2)))
-[ "$(brightness "$ink")" -lt 20 ] && ok "the ink theme paints the screen black ($ink)" || ko "the ink theme paints the screen black ($ink)"
+ink=$(band_of $((H / 3)) $((H / 2)))
+[ "$(median "$ink")" -lt 20 ] && ok "the ink theme paints the screen black (min median max: $ink)" ||
+  ko "the ink theme paints the screen black (min median max: $ink)"
 sh dumpsys jobscheduler | grep -q "$PKG.*$JOB" && ko "nothing is scheduled before a collection is set" || ok "nothing is scheduled before a collection is set"
 
 # 2. The settings screen offers the four backgrounds.
@@ -133,10 +106,11 @@ tap_text "Gradient" || ko "choosing the gradient"
 ui=$(dump)
 has_text "Starts with" "$ui" && ok "the gradient colours appear when it is chosen" || ko "the gradient colours appear"
 home
-topc=$(pixel $((W / 2)) $((H / 8)))
-botc=$(pixel $((W / 2)) $((H * 7 / 8)))
-diff=$(( $(brightness "$topc") - $(brightness "$botc") ))
-[ "${diff#-}" -gt 8 ] && ok "the gradient runs from $topc to $botc" || ko "the gradient runs top to bottom (top $topc, bottom $botc)"
+topc=$(median "$(band_of $((H / 8)))")
+botc=$(median "$(band_of $((H * 7 / 8)))")
+diff=$(( topc - botc ))
+[ "${diff#-}" -gt 8 ] && ok "the gradient runs from $topc at the top to $botc at the bottom" ||
+  ko "the gradient runs top to bottom (top $topc, bottom $botc)"
 
 # 4. The device wallpaper shows through the window rather than being copied into it.
 open_background_settings || ko "reopening the background settings"
@@ -187,24 +161,24 @@ else
   grep -q 'currentUrl' <<<"$state" && ok "an image was fetched" || ko "an image was fetched ($state)"
   grep -q '"urls":\["https://raw' <<<"$state" && ok "the list was read and cached" || ko "the list was read and cached"
   home
-  bg=$(pixel $((W / 2)) $((H / 6)))
-  info "the screen behind the names is now $bg"
-  [ "$(brightness "$bg")" -gt 40 ] && ok "the image is on screen" || info "the dark image may be showing; asking for the next one"
-  if [ "$(brightness "$bg")" -lt 40 ]; then
-    open_background_settings; scroll_to_tap "Change now"; wait_s 6; home
-    bg=$(pixel $((W / 2)) $((H / 6)))
-    [ "$(brightness "$bg")" -gt 40 ] && ok "the image is on screen ($bg)" || ko "the image is on screen ($bg)"
+  bg=$(median "$(band_of $((H / 8)) $((H / 5)))")
+  info "the screen behind the names reads $bg"
+  if [ "$bg" -lt 40 ]; then
+    info "the dark image is showing; asking for the bright one"
+    open_background_settings; scroll_to_tap "Change now"; wait_s 8; home
+    bg=$(median "$(band_of $((H / 8)) $((H / 5)))")
   fi
+  [ "$bg" -gt 40 ] && ok "the image is on screen ($bg)" || ko "the image is on screen ($bg)"
   # The names are drawn over it: on the bright image they have to be dark to be read at all.
   ui=$(dump)
   row=$(grep -o "<node[^>]*class=\"android.widget.TextView\"[^>]*package=\"$PKG\"[^>]*>" <<<"$ui" | grep -o 'text="[^"]\+"' | sed 's/text="\(.*\)"/\1/' | grep -vE '^[0-9]{1,2}:[0-9]{2}|%|Set atomic' | head -1)
   if [ -n "$row" ]; then
     b=$(bounds_of "$row" "$ui"); read -r x1 y1 x2 y2 <<<"$b"
-    text_pixel=$(pixel $(( (10#$x1 + 10#$x2) / 2 )) $(( (10#$y1 + 10#$y2) / 2 )))
-    around=$(pixel $(( 10#$x1 - 8 )) $(( (10#$y1 + 10#$y2) / 2 )))
-    info "the name '$row' is drawn at $text_pixel on $around"
-    [ "$(brightness "$text_pixel")" -lt "$(brightness "$around")" ] &&
-      ok "the names went dark over the bright image" || ko "the names went dark over the bright image"
+    stats=$(band_of $(( 10#$y1 + 4 )) $(( 10#$y2 - 4 )))
+    info "the band holding '$row' reads $stats (min median max)"
+    [ "$(darkest "$stats")" -lt $(( $(median "$stats") - 40 )) ] &&
+      ok "the names went dark over the bright image" ||
+      ko "the names went dark over the bright image ($stats)"
   else
     info "no app row to read the text colour from"
   fi
@@ -213,32 +187,61 @@ else
   sh run-as "$PKG" ls files/background | grep -q current.img &&
     ok "trimming caches leaves the current image" || ko "trimming caches leaves the current image"
   # 9. What it costs. Recorded first, tightened once there are numbers from both emulators.
-  graphics=$(meminfo Graphics)
-  java=$(meminfo "Java Heap")
-  total=$(sh dumpsys meminfo "$PKG" | grep -E 'TOTAL PSS|TOTAL' | head -1 | awk '{print $2}')
-  budget=$(( W * H * 4 * 125 / 100 / 1024 ))
-  info "Graphics ${graphics:-?} KB (window budget ${budget} KB), Java heap ${java:-?} KB, total ${total:-?} KB"
-  if [ -n "${graphics:-}" ]; then
-    [ "$graphics" -le $(( budget * 2 )) ] && ok "graphics memory is within twice the window" ||
-      ko "graphics memory is $graphics KB against a ${budget} KB window"
-  fi
-  if [ -n "${total:-}" ]; then
-    [ "$total" -le 51200 ] && ok "total memory is under 50 MB (${total} KB)" || ko "total memory is ${total} KB"
-  fi
+  graphics=$(meminfo "Graphics:")
+  native=$(meminfo "Native Heap:")
+  java=$(meminfo "Java Heap:")
+  with_image=$(meminfo "TOTAL PSS:")
+  budget=$(( W * H * 4 / 1024 ))
+  info "with the image up: graphics ${graphics:-?} KB, native ${native:-?} KB, java ${java:-?} KB, total PSS ${with_image:-?} KB"
+  info "one screenful of pixels is ${budget} KB; without a real GPU it is held in the native heap, not in graphics"
+  # A decode that is never let go of would show here: the image is decoded again on every rotation,
+  # so six of them would be carrying six screenfuls if anything held on to them.
+  sh settings put system accelerometer_rotation 0 >/dev/null
+  for i in 1 2 3 4 5 6; do sh settings put system user_rotation $((i % 2)) >/dev/null; wait_s 3; done
+  sh settings put system user_rotation 0 >/dev/null; wait_s 2
+  after_rotations=$(meminfo "TOTAL PSS:")
+  drift=$(( after_rotations - with_image ))
+  info "after six rotations, each one a fresh decode: ${after_rotations} KB (${drift} KB more)"
+  [ "${drift#-}" -le "$budget" ] && ok "decoding the image again does not add up" ||
+    ko "six decodes added ${drift} KB, about $(( drift / budget )) screenfuls"
+
+  # 10. The image is the one thing here worth megabytes, so it is the first thing given back.
+  native_before=$(meminfo "Native Heap:")
+  pid=$(sh pidof "$PKG")
+  sh am start -a android.settings.SETTINGS >/dev/null 2>&1; wait_s 3
+  sh am send-trim-memory "$pid" COMPLETE >/dev/null 2>&1; wait_s 4
+  native_after=$(meminfo "Native Heap:")
+  given_back=$(( native_before - native_after ))
+  info "a system short of memory got back ${given_back} KB of ${native_before} KB"
+  [ "$given_back" -ge $(( budget / 2 )) ] && ok "the image is handed back when the system is short" ||
+    ko "only ${given_back} KB was handed back of a ${budget} KB screenful"
+  home
+  wait_s 5
+  again=$(median "$(band_of $((H / 8)) $((H / 5)))")
+  [ "$again" -gt 40 ] && ok "and is decoded again when the launcher comes back ($again)" ||
+    ko "and is decoded again when the launcher comes back ($again)"
 fi
 
 # 10. Turning the collection off puts the theme colour back and cancels the job.
 open_background_settings || ko "reopening the background settings"
 tap_text "Theme colour" || ko "choosing the theme colour again"
 home
-back=$(pixel $((W / 2)) $((H / 6)))
-[ "$(brightness "$back")" -lt 20 ] && ok "the theme colour comes back ($back)" || ko "the theme colour comes back ($back)"
+back=$(median "$(band_of $((H / 8)) $((H / 5)))")
+[ "$back" -lt 20 ] && ok "the theme colour comes back ($back)" || ko "the theme colour comes back ($back)"
+if [ "$online" = "yes" ]; then
+  # Recorded rather than gated: this is a debug build with no R8 and StrictMode on, drawn by a
+  # software renderer that keeps every pixel in the native heap. A release build on a phone puts
+  # the image in graphics memory instead, and that number needs a phone to read.
+  info "without an image the launcher is $(meminfo "TOTAL PSS:") KB of total PSS"
+fi
 sh dumpsys jobscheduler | grep -q "$PKG.*$JOB" && ko "the job is cancelled with it" || ok "the job is cancelled with it"
 
 # 11. A restart shows the same thing it was showing, without fetching again.
 sh am force-stop "$PKG" >/dev/null; wait_s 2
 home
-[ "$(brightness "$(pixel $((W / 2)) $((H / 2)))")" -lt 20 ] && ok "a restart paints the same background" || ko "a restart paints the same background"
+restarted=$(median "$(band_of $((H / 3)) $((H / 2)))")
+[ "$restarted" -lt 20 ] && ok "a restart paints the same background ($restarted)" ||
+  ko "a restart paints the same background ($restarted)"
 
 [ "$(crashes)" = "0" ] && ok "no crashes during the run" || ko "$(crashes) crash(es) logged"
 echo "== $pass passed, $fail failed =="

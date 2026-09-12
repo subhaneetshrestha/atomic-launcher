@@ -40,9 +40,14 @@ class BackgroundController(
     }
 
     private val appContext = context.applicationContext
-    private val store = ImageStore(appContext.filesDir)
-    private val engine =
+
+    // Asking for the private directory touches the disk, and this is built while the home app is
+    // starting, so both wait until something needs them — which is always on the I/O thread.
+    private val store by lazy { ImageStore(appContext.filesDir) }
+
+    private val engine by lazy {
         BackgroundEngine(store, ImageFetcher(userAgent(appContext)), NetworkPolicy(appContext))
+    }
     private val listeners = CopyOnWriteArrayList<Listener>()
 
     /** The image on screen, or null when there is none. Main thread. */
@@ -103,8 +108,14 @@ class BackgroundController(
         Threads.io.post { loadCurrent(store.readState()) }
     }
 
-    /** The home screen came back: change the image if it is old enough, quietly and only on wi-fi. */
+    /**
+     * The home screen came back. Anything given back to a system short of memory is decoded again
+     * here; then, if the interval has run out, the next image is fetched — quietly, and on wi-fi.
+     */
     fun onHomeResumed() {
+        if (settings.settings.theme.background.mode == BackgroundMode.COLLECTION && image == null) {
+            Threads.io.post { loadCurrent(store.readState()) }
+        }
         run(BackgroundEngine.Trigger.OPPORTUNISTIC)
     }
 
@@ -122,8 +133,17 @@ class BackgroundController(
         return outcome is BackgroundEngine.Outcome.Failed
     }
 
+    /**
+     * Merely being off screen is not a reason to let the image go: the launcher is back the moment
+     * an app is closed, and decoding it again costs more than holding it. It goes when the device
+     * is actually short of memory, or when this process is far enough down the list to be at risk.
+     */
     fun onTrimMemory(level: Int) {
-        if (level < ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) return
+        val short =
+            level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
+                level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+                level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE
+        if (!short) return
         Threads.main.post {
             if (image == null) return@post
             Logs.d(TAG) { "dropping the background image at trim level $level" }
