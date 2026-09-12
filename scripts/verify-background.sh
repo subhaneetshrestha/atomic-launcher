@@ -38,6 +38,12 @@ scroll_to_tap() {
   done
   return 1
 }
+# One key press per call: several keycodes in one `input keyevent` are accepted and then not all
+# delivered. The cursor sits at the end of a field, so backspace is the only direction needed.
+clear_field() {
+  local i
+  for i in $(seq 1 "${1:-16}"); do sh input keyevent KEYCODE_DEL >/dev/null; done
+}
 home() { sh am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1; wait_s 2; }
 crashes() { $ADB logcat -d -b crash 2>/dev/null | tr -d '\r' | grep -c "$PKG" || true; }
 hold_at() { sh input swipe "$1" "$2" "$1" "$2" 1200 >/dev/null; wait_s 2; }
@@ -147,8 +153,7 @@ grep -q '"url":"http://' <<<"$(settings_json)" && ko "a plaintext address is ref
 
 tap_text "Collection address" >/dev/null 2>&1 || open_background_settings
 tap_text "Collection address" >/dev/null 2>&1 || true
-sh input keyevent KEYCODE_MOVE_END >/dev/null
-for i in $(seq 1 40); do sh input keyevent KEYCODE_DEL >/dev/null; done
+clear_field 40
 sh input text "$RAW/collection.txt" >/dev/null; wait_s 1
 tap_text "OK" || ko "confirming the address"
 ui=$(dump)

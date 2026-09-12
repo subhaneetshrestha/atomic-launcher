@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The only thing the launcher ever hands to another app: a theme it wrote to share. -->
+<paths>
+    <cache-path
+        name="shared"
+        path="shared/" />
+</paths>

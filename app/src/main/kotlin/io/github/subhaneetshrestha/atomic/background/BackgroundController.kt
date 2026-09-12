@@ -46,7 +46,7 @@ class BackgroundController(
     private val store by lazy { ImageStore(appContext.filesDir) }
 
     private val engine by lazy {
-        BackgroundEngine(store, ImageFetcher(userAgent(appContext)), NetworkPolicy(appContext))
+        BackgroundEngine(store, ImageFetcher(launcherUserAgent(appContext)), NetworkPolicy(appContext))
     }
     private val listeners = CopyOnWriteArrayList<Listener>()
 
@@ -268,9 +268,6 @@ class BackgroundController(
     private fun notifyListeners() {
         for (listener in listeners) listener.onBackgroundChanged()
     }
-
-    private fun userAgent(context: Context): String =
-        "atomic-launcher/${context.packageName} (Android ${android.os.Build.VERSION.RELEASE})"
 
     private companion object {
         const val TAG = "BackgroundController"

@@ -74,6 +74,76 @@
             android:label="@string/settings_title" />
 
         <!--
+            A theme that arrived from somewhere else. Exported because that is the whole point:
+            a file manager, a share sheet or a link opens it. It applies nothing on arrival — it
+            shows what the theme is and waits to be told.
+        -->
+        <activity
+            android:name=".share.ImportActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:label="@string/import_title">
+            <intent-filter android:label="@string/import_title">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/json" />
+            </intent-filter>
+            <intent-filter android:label="@string/import_title">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <!--
+                A file manager that knows nothing about the type still knows the name. This is not
+                an app link and has no host to name: a file: URI has an empty authority, so lint's
+                demand for one would stop the filter matching anything at all.
+            -->
+            <intent-filter
+                android:label="@string/import_title"
+                tools:ignore="AppLinkUrlError">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+                <data android:pathSuffix=".atomictheme" />
+            </intent-filter>
+            <intent-filter android:label="@string/import_title">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <!-- atomic://theme?d=<the theme itself> or ?url=<where to fetch it from> -->
+            <intent-filter android:label="@string/import_title">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="theme"
+                    android:scheme="atomic" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            The only thing the launcher ever hands to another app: a theme it wrote to share.
+            Not exported; a share sheet reaches it through the grant on the intent.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!--
             The scheduled turn of the background. Exported because JobScheduler starts it, and
             guarded by BIND_JOB_SERVICE so only the system can.
         -->

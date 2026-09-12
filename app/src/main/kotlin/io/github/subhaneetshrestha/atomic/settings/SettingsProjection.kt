@@ -23,18 +23,8 @@ fun Settings.toHomeSettings(): HomeSettings {
         homeAppCount = home.fallbackCount,
         labelOverrides = overrides,
         hidden = hidden.mapNotNull { AppKey.fromComponent(it.component, it.user) }.toSet(),
-        horizontalAlignment =
-            when (theme.layout.hAlign) {
-                HAlign.START -> HorizontalAlignment.START
-                HAlign.CENTER -> HorizontalAlignment.CENTER
-                HAlign.END -> HorizontalAlignment.END
-            },
-        verticalPosition =
-            when (theme.layout.vAlign) {
-                VAlign.TOP -> VerticalPosition.TOP
-                VAlign.CENTER -> VerticalPosition.CENTER
-                VAlign.BOTTOM -> VerticalPosition.BOTTOM
-            },
+        horizontalAlignment = theme.layout.hAlign.toAlignment(),
+        verticalPosition = theme.layout.vAlign.toPosition(),
         textSizeSp = theme.typography.sizes.homeSp,
         drawerTextSizeSp = theme.typography.sizes.drawerSp,
         autoLaunchSingle = search.autoLaunchSingle,
@@ -52,6 +42,20 @@ fun Settings.toHomeSettings(): HomeSettings {
         verticalPaddingDp = theme.layout.paddingDp.v,
     )
 }
+
+fun HAlign.toAlignment(): HorizontalAlignment =
+    when (this) {
+        HAlign.START -> HorizontalAlignment.START
+        HAlign.CENTER -> HorizontalAlignment.CENTER
+        HAlign.END -> HorizontalAlignment.END
+    }
+
+fun VAlign.toPosition(): VerticalPosition =
+    when (this) {
+        VAlign.TOP -> VerticalPosition.TOP
+        VAlign.CENTER -> VerticalPosition.CENTER
+        VAlign.BOTTOM -> VerticalPosition.BOTTOM
+    }
 
 /** The persisted form of an app identity: flattened component plus user serial. */
 fun AppKey.toRef(): AppRef = AppRef(flattenedComponent, userSerial)

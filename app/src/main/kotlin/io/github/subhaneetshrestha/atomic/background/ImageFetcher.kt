@@ -61,6 +61,7 @@ class ImageFetcher(
         url: String,
         etag: String? = null,
         lastModified: String? = null,
+        maxBytes: Int = MAX_INDEX_BYTES,
     ): Outcome {
         val opened =
             open(url) { connection ->
@@ -71,8 +72,8 @@ class ImageFetcher(
         return try {
             if (ok.connection.responseCode == HTTP_NOT_MODIFIED) return Outcome.Unchanged
             val bytes =
-                ok.connection.inputStream.use { read(it, MAX_INDEX_BYTES.toLong()) }
-                    ?: return Outcome.Failed("the list is larger than ${MAX_INDEX_BYTES / 1024} KiB", permanent = true)
+                ok.connection.inputStream.use { read(it, maxBytes.toLong()) }
+                    ?: return Outcome.Failed("the document is larger than ${maxBytes / 1024} KiB", permanent = true)
             Outcome.Index(
                 body = String(bytes, Charsets.UTF_8),
                 head = bytes.copyOf(minOf(bytes.size, SourceDetector.SNIFF_BYTES)),
@@ -293,3 +294,7 @@ class ImageFetcher(
         private const val TAG = "ImageFetcher"
     }
 }
+
+/** What the launcher calls itself to a server it fetches from. */
+fun launcherUserAgent(context: android.content.Context): String =
+    "atomic-launcher/${context.packageName} (Android ${android.os.Build.VERSION.RELEASE})"

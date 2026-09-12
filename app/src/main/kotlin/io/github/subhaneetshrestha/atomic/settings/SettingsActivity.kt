@@ -39,14 +39,19 @@ import io.github.subhaneetshrestha.atomic.core.theme.Action
 import io.github.subhaneetshrestha.atomic.core.theme.ActionGroup
 import io.github.subhaneetshrestha.atomic.core.theme.Background
 import io.github.subhaneetshrestha.atomic.core.theme.BackgroundMode
+import io.github.subhaneetshrestha.atomic.core.theme.BadgePosition
+import io.github.subhaneetshrestha.atomic.core.theme.BadgeStyle
 import io.github.subhaneetshrestha.atomic.core.theme.BindingSurface
 import io.github.subhaneetshrestha.atomic.core.theme.BuiltinId
 import io.github.subhaneetshrestha.atomic.core.theme.BuiltinThemes
 import io.github.subhaneetshrestha.atomic.core.theme.ColorValue
+import io.github.subhaneetshrestha.atomic.core.theme.ColorsOverride
 import io.github.subhaneetshrestha.atomic.core.theme.ConsentKind
 import io.github.subhaneetshrestha.atomic.core.theme.DecodeResult
 import io.github.subhaneetshrestha.atomic.core.theme.EdgeExclusion
+import io.github.subhaneetshrestha.atomic.core.theme.HAlign
 import io.github.subhaneetshrestha.atomic.core.theme.HomeLimits
+import io.github.subhaneetshrestha.atomic.core.theme.Labels
 import io.github.subhaneetshrestha.atomic.core.theme.LinkRules
 import io.github.subhaneetshrestha.atomic.core.theme.NightMode
 import io.github.subhaneetshrestha.atomic.core.theme.PackageRef
@@ -54,15 +59,22 @@ import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.core.theme.Settings
 import io.github.subhaneetshrestha.atomic.core.theme.SettingsCodec
 import io.github.subhaneetshrestha.atomic.core.theme.SettingsEdits
+import io.github.subhaneetshrestha.atomic.core.theme.Theme
+import io.github.subhaneetshrestha.atomic.core.theme.ThemeEdits
+import io.github.subhaneetshrestha.atomic.core.theme.ThemeLink
+import io.github.subhaneetshrestha.atomic.core.theme.VAlign
 import io.github.subhaneetshrestha.atomic.home.DefaultHomePrompt
 import io.github.subhaneetshrestha.atomic.home.HomeListModel
 import io.github.subhaneetshrestha.atomic.notifications.NotificationAccess
 import io.github.subhaneetshrestha.atomic.settings.grant.Grants
 import io.github.subhaneetshrestha.atomic.settings.grant.InstallSourceProbe
 import io.github.subhaneetshrestha.atomic.settings.grant.Restriction
+import io.github.subhaneetshrestha.atomic.share.ImportActivity
+import io.github.subhaneetshrestha.atomic.share.ThemeFiles
 import io.github.subhaneetshrestha.atomic.system.NoSystemActions
 import io.github.subhaneetshrestha.atomic.util.Logs
 import io.github.subhaneetshrestha.atomic.util.Threads
+import io.github.subhaneetshrestha.atomic.util.readAtMost
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -87,12 +99,24 @@ class SettingsActivity : ThemedActivity() {
     private lateinit var container: FrameLayout
     private val stack = ArrayDeque<Screen>()
 
+    /**
+     * Editing a theme changes the colours this screen is drawn in, so the activity is recreated on
+     * every edit. Without this, changing the badge colour would send the list back to the top.
+     */
+    private var restoreScroll = 0
+
     private val exportLauncher =
         registerForActivityResult(
             ActivityResultContracts.CreateDocument("application/json"),
         ) { uri -> uri?.let(::exportTo) }
     private val importLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(::importFrom) }
+    private val themeExportLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.CreateDocument("application/octet-stream"),
+        ) { uri -> uri?.let(::writeThemeTo) }
+    private val themeImportLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(::openTheme) }
     private val documentListener: (Settings, Settings) -> Unit = { old, new ->
         // Everything about a theme but its background decides the colours this screen is drawn in.
         val looksDifferent = old.theme.copy(background = new.theme.background) != new.theme
@@ -137,6 +161,7 @@ class SettingsActivity : ThemedActivity() {
                 }
             },
         )
+        restoreScroll = savedInstanceState?.getInt(STATE_SCROLL) ?: 0
         val ids = savedInstanceState?.getIntArray(STATE_STACK) ?: intArrayOf(ScreenId.MENU.ordinal)
         val args = savedInstanceState?.getIntArray(STATE_ARGS) ?: IntArray(ids.size) { -1 }
         for (index in ids.indices.take(
@@ -174,6 +199,7 @@ class SettingsActivity : ThemedActivity() {
         super.onSaveInstanceState(outState)
         outState.putIntArray(STATE_STACK, stack.map { it.id.ordinal }.toIntArray())
         outState.putIntArray(STATE_ARGS, stack.map { it.arg }.toIntArray())
+        outState.putInt(STATE_SCROLL, (container.getChildAt(0) as? ListView)?.firstVisiblePosition ?: 0)
     }
 
     private fun screenFor(
@@ -192,6 +218,7 @@ class SettingsActivity : ThemedActivity() {
             ScreenId.ACTION_PICKER -> ActionPickerScreen(arg)
             ScreenId.APP_PICKER -> AppPickerScreen(arg)
             ScreenId.THEME -> ThemeScreen()
+            ScreenId.THEME_EDITOR -> ThemeEditorScreen()
             ScreenId.BACKGROUND -> BackgroundScreen()
             ScreenId.APPEARANCE -> AppearanceScreen()
             ScreenId.BACKUP -> BackupScreen()
@@ -236,6 +263,10 @@ class SettingsActivity : ThemedActivity() {
             dividerHeight = 0
             setOnItemClickListener { _, _, position, _ -> onClick(position) }
             if (onLongClick != null) setOnItemLongClickListener { _, _, position, _ -> onLongClick(position) }
+            if (restoreScroll > 0) {
+                setSelection(restoreScroll)
+                restoreScroll = 0
+            }
         }
 
     /** A screen of prose with tappable actions under it: disclosures and help pages. */
@@ -288,6 +319,10 @@ class SettingsActivity : ThemedActivity() {
         val pad = dp(20)
         val container = FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0) }
         container.addView(input)
+        // The value arrives selected, so typing replaces it: these are short things — a colour, a
+        // size, an address — that are retyped rather than edited a character at a time. Tapping
+        // anywhere in the field puts the cursor there instead.
+        input.selectAll()
         AlertDialog
             .Builder(this)
             .setTitle(titleRes)
@@ -295,6 +330,73 @@ class SettingsActivity : ThemedActivity() {
             .setView(container)
             .setPositiveButton(android.R.string.ok) { _, _ -> onOk() }
             .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** A colour typed as #RRGGBB, or the word that means "follow the text" where that is allowed. */
+    private fun askColour(
+        titleRes: Int,
+        current: String,
+        allowAuto: Boolean = false,
+        apply: (String) -> Unit,
+    ) {
+        val input =
+            EditText(this).apply {
+                inputType = InputType.TYPE_CLASS_TEXT
+                setHint(R.string.background_colour_hint)
+                setText(current)
+            }
+        prompt(titleRes, if (allowAuto) getString(R.string.editor_auto_hint) else null, input) {
+            val value = ColorValue.normalize(input.text.toString(), allowAuto = allowAuto)
+            if (value == null) toast(getString(R.string.background_colour_invalid)) else apply(value)
+        }
+    }
+
+    /** A number, whole or not. Anything outside the allowed range is pulled into it when stored. */
+    private fun askNumber(
+        titleRes: Int,
+        current: String,
+        decimal: Boolean,
+        apply: (Float) -> Unit,
+    ) {
+        val input =
+            EditText(this).apply {
+                inputType =
+                    InputType.TYPE_CLASS_NUMBER or if (decimal) InputType.TYPE_NUMBER_FLAG_DECIMAL else 0
+                setText(current)
+            }
+        prompt(titleRes, null, input) {
+            val value =
+                input.text
+                    .toString()
+                    .trim()
+                    .toFloatOrNull()
+            if (value == null) toast(getString(R.string.editor_number_invalid)) else apply(value)
+        }
+    }
+
+    private fun askText(
+        titleRes: Int,
+        current: String,
+        apply: (String) -> Unit,
+    ) {
+        val input =
+            EditText(this).apply {
+                inputType = InputType.TYPE_CLASS_TEXT
+                setText(current)
+            }
+        prompt(titleRes, null, input) { apply(input.text.toString().trim()) }
+    }
+
+    private fun choose(
+        titleRes: Int,
+        labels: List<String>,
+        pick: (Int) -> Unit,
+    ) {
+        AlertDialog
+            .Builder(this)
+            .setTitle(titleRes)
+            .setItems(labels.toTypedArray()) { _, index -> pick(index) }
             .show()
     }
 
@@ -312,6 +414,7 @@ class SettingsActivity : ThemedActivity() {
         ACTION_PICKER,
         APP_PICKER,
         THEME,
+        THEME_EDITOR,
         BACKGROUND,
         APPEARANCE,
         BACKUP,
@@ -810,35 +913,6 @@ class SettingsActivity : ThemedActivity() {
             }
         }
 
-        private fun askColour(
-            titleRes: Int,
-            current: String,
-            apply: (String) -> Unit,
-        ) {
-            val input =
-                EditText(this@SettingsActivity).apply {
-                    inputType = InputType.TYPE_CLASS_TEXT
-                    setHint(R.string.background_colour_hint)
-                    setText(current)
-                }
-            prompt(titleRes, null, input) {
-                val value = ColorValue.normalize(input.text.toString(), allowAuto = false)
-                if (value == null) toast(getString(R.string.background_colour_invalid)) else apply(value)
-            }
-        }
-
-        private fun choose(
-            titleRes: Int,
-            labels: List<String>,
-            pick: (Int) -> Unit,
-        ) {
-            AlertDialog
-                .Builder(this@SettingsActivity)
-                .setTitle(titleRes)
-                .setItems(labels.toTypedArray()) { _, index -> pick(index) }
-                .show()
-        }
-
         private fun add(
             row: Row,
             tap: () -> Unit = {},
@@ -852,32 +926,293 @@ class SettingsActivity : ThemedActivity() {
         }
     }
 
+    /**
+     * Which theme is showing, and what can be done with it: edited, shared as a file or a link,
+     * written out, or replaced by one somebody else made.
+     */
     private inner class ThemeScreen : Screen(ScreenId.THEME, R.string.settings_theme) {
+        private lateinit var adapter: RowAdapter
+        private val rows = mutableListOf<Row>()
+        private val taps = mutableListOf<() -> Unit>()
+
         override fun createView(): View {
-            val themes = BuiltinThemes.all
-            val currentId = settings.settings.theme.meta.id
-            val adapter =
-                RowAdapter(
-                    this@SettingsActivity,
-                    colors,
-                    themes.map {
-                        Row(
-                            it.meta.name,
-                            it.meta.description,
-                            checked = it.meta.id == currentId,
-                            singleChoice = true,
-                        )
-                    },
-                )
-            return list(adapter, onClick = { position ->
-                settings.update { current ->
-                    // A built-in brings its colours, not a background: the one set up here stays.
-                    val chosen = themes[position]
-                    val background =
-                        if (chosen.background == Background()) current.theme.background else chosen.background
-                    current.copy(theme = chosen.copy(background = background))
+            adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
+            refresh()
+            return list(adapter, onClick = { position -> taps.getOrNull(position)?.invoke() })
+        }
+
+        override fun refresh() {
+            rows.clear()
+            taps.clear()
+            val theme = settings.settings.theme
+            val builtin = ThemeEdits.builtinBehind(theme)
+            add(Row(getString(R.string.theme_builtins), isHeader = true))
+            for (candidate in BuiltinThemes.all) {
+                add(
+                    Row(
+                        candidate.meta.name,
+                        candidate.meta.description,
+                        checked = builtin?.meta?.id == candidate.meta.id,
+                        singleChoice = true,
+                    ),
+                ) { choose(candidate) }
+            }
+            if (builtin == null) {
+                add(Row(getString(R.string.theme_custom), isHeader = true))
+                add(Row(theme.meta.name, theme.meta.author, checked = true, singleChoice = true))
+            }
+            add(Row(getString(R.string.theme_current), isHeader = true))
+            add(Row(getString(R.string.theme_edit))) { push(ThemeEditorScreen()) }
+            add(Row(getString(R.string.theme_share_file))) { shareThemeAsFile() }
+            add(Row(getString(R.string.theme_share_link))) { shareThemeAsLink() }
+            add(Row(getString(R.string.theme_save))) { themeExportLauncher.launch(ThemeFiles.fileName(theme)) }
+            add(Row(getString(R.string.theme_import))) { themeImportLauncher.launch(arrayOf("*/*")) }
+            adapter.rows = rows.toList()
+            adapter.notifyDataSetChanged()
+        }
+
+        /** A built-in brings its colours, not a background: the one set up here stays. */
+        private fun choose(chosen: Theme) {
+            settings.update { current ->
+                val background =
+                    if (chosen.background == Background()) current.theme.background else chosen.background
+                current.copy(theme = chosen.copy(background = background))
+            }
+        }
+
+        private fun add(
+            row: Row,
+            tap: () -> Unit = {},
+        ) {
+            rows += row
+            taps += tap
+        }
+    }
+
+    /**
+     * Every value a theme holds, in the order somebody changing one thinks about them. Each edit
+     * goes through the same pass a theme read from a file does, so a size typed with one digit too
+     * many is pulled into range as it is typed.
+     */
+    private inner class ThemeEditorScreen : Screen(ScreenId.THEME_EDITOR, R.string.editor_title) {
+        private lateinit var adapter: RowAdapter
+        private val rows = mutableListOf<Row>()
+        private val taps = mutableListOf<() -> Unit>()
+
+        override fun createView(): View {
+            adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
+            refresh()
+            return list(adapter, onClick = { position -> taps.getOrNull(position)?.invoke() })
+        }
+
+        override fun refresh() {
+            rows.clear()
+            taps.clear()
+            val theme = settings.settings.theme
+            meta(theme)
+            colours(theme)
+            typography(theme)
+            layout(theme)
+            badge(theme)
+            adapter.rows = rows.toList()
+            adapter.notifyDataSetChanged()
+        }
+
+        private fun meta(theme: Theme) {
+            add(Row(getString(R.string.editor_name), theme.meta.name)) {
+                askText(R.string.editor_name, theme.meta.name) { value ->
+                    val name = Labels.clean(value) ?: return@askText
+                    edit { it.copy(meta = it.meta.copy(name = name)) }
                 }
-            })
+            }
+            add(Row(getString(R.string.editor_author), theme.meta.author.orEmpty())) {
+                askText(R.string.editor_author, theme.meta.author.orEmpty()) { value ->
+                    edit { it.copy(meta = it.meta.copy(author = value.ifBlank { null })) }
+                }
+            }
+        }
+
+        private fun colours(theme: Theme) {
+            add(Row(getString(R.string.editor_colours), isHeader = true))
+            val day = theme.colors
+            colour(
+                R.string.editor_background,
+                day.background,
+            ) { v -> edit { it.copy(colors = it.colors.copy(background = v)) } }
+            colour(
+                R.string.editor_text,
+                day.text,
+                allowAuto = true,
+            ) { v -> edit { it.copy(colors = it.colors.copy(text = v)) } }
+            colour(R.string.editor_text_secondary, day.textSecondary, allowAuto = true) { v ->
+                edit { it.copy(colors = it.colors.copy(textSecondary = v)) }
+            }
+            colour(R.string.editor_accent, day.accent) { v -> edit { it.copy(colors = it.colors.copy(accent = v)) } }
+
+            val night = theme.darkColors
+            add(
+                Row(
+                    getString(R.string.editor_night_own),
+                    getString(R.string.editor_night_own_detail),
+                    checked = night != null,
+                ),
+            ) {
+                edit { current ->
+                    current.copy(
+                        darkColors =
+                            if (current.darkColors == null) {
+                                ColorsOverride(
+                                    current.colors.background,
+                                    current.colors.text,
+                                    current.colors.textSecondary,
+                                    current.colors.accent,
+                                )
+                            } else {
+                                null
+                            },
+                    )
+                }
+            }
+            if (night == null) return
+            add(Row(getString(R.string.editor_night), isHeader = true))
+            colour(R.string.editor_background, night.background ?: day.background) { v ->
+                edit { it.copy(darkColors = it.darkColors?.copy(background = v)) }
+            }
+            colour(R.string.editor_text, night.text ?: day.text, allowAuto = true) { v ->
+                edit { it.copy(darkColors = it.darkColors?.copy(text = v)) }
+            }
+            colour(R.string.editor_text_secondary, night.textSecondary ?: day.textSecondary, allowAuto = true) { v ->
+                edit { it.copy(darkColors = it.darkColors?.copy(textSecondary = v)) }
+            }
+            colour(R.string.editor_accent, night.accent ?: day.accent) { v ->
+                edit { it.copy(darkColors = it.darkColors?.copy(accent = v)) }
+            }
+        }
+
+        private fun typography(theme: Theme) {
+            val typography = theme.typography
+            add(Row(getString(R.string.editor_typography), isHeader = true))
+            add(Row(getString(R.string.editor_family), typography.family)) {
+                choose(R.string.editor_family, FAMILIES) { index ->
+                    edit { it.copy(typography = it.typography.copy(family = FAMILIES[index])) }
+                }
+            }
+            add(Row(getString(R.string.editor_weight), typography.weight.toString())) {
+                choose(R.string.editor_weight, WEIGHTS.map { it.toString() }) { index ->
+                    edit { it.copy(typography = it.typography.copy(weight = WEIGHTS[index])) }
+                }
+            }
+            add(Row(getString(R.string.editor_italic), checked = typography.italic)) {
+                edit { it.copy(typography = it.typography.copy(italic = !typography.italic)) }
+            }
+            val sizes = typography.sizes
+            size(R.string.editor_size_home, sizes.homeSp) { v ->
+                edit { it.copy(typography = it.typography.copy(sizes = it.typography.sizes.copy(homeSp = v))) }
+            }
+            size(R.string.editor_size_drawer, sizes.drawerSp) { v ->
+                edit { it.copy(typography = it.typography.copy(sizes = it.typography.sizes.copy(drawerSp = v))) }
+            }
+            size(R.string.editor_size_clock, sizes.clockSp) { v ->
+                edit { it.copy(typography = it.typography.copy(sizes = it.typography.sizes.copy(clockSp = v))) }
+            }
+            size(R.string.editor_size_info, sizes.infoSp) { v ->
+                edit { it.copy(typography = it.typography.copy(sizes = it.typography.sizes.copy(infoSp = v))) }
+            }
+        }
+
+        private fun layout(theme: Theme) {
+            val layout = theme.layout
+            add(Row(getString(R.string.editor_layout), isHeader = true))
+            add(Row(getString(R.string.editor_halign), getString(H_ALIGNMENTS.getValue(layout.hAlign)))) {
+                choose(R.string.editor_halign, H_ALIGNMENTS.values.map { getString(it) }) { index ->
+                    edit { it.copy(layout = it.layout.copy(hAlign = H_ALIGNMENTS.keys.toList()[index])) }
+                }
+            }
+            add(Row(getString(R.string.editor_valign), getString(V_ALIGNMENTS.getValue(layout.vAlign)))) {
+                choose(R.string.editor_valign, V_ALIGNMENTS.values.map { getString(it) }) { index ->
+                    edit { it.copy(layout = it.layout.copy(vAlign = V_ALIGNMENTS.keys.toList()[index])) }
+                }
+            }
+            pixels(R.string.editor_padding_h, layout.paddingDp.h) { v ->
+                edit { it.copy(layout = it.layout.copy(paddingDp = it.layout.paddingDp.copy(h = v))) }
+            }
+            pixels(R.string.editor_padding_v, layout.paddingDp.v) { v ->
+                edit { it.copy(layout = it.layout.copy(paddingDp = it.layout.paddingDp.copy(v = v))) }
+            }
+            pixels(R.string.editor_row_gap, layout.rowGapDp) { v ->
+                edit { it.copy(layout = it.layout.copy(rowGapDp = v)) }
+            }
+        }
+
+        private fun badge(theme: Theme) {
+            val badge = theme.badge
+            add(Row(getString(R.string.editor_badge), isHeader = true))
+            add(Row(getString(R.string.editor_badge_style), getString(BADGE_STYLES.getValue(badge.style)))) {
+                choose(R.string.editor_badge_style, BADGE_STYLES.values.map { getString(it) }) { index ->
+                    edit { it.copy(badge = it.badge.copy(style = BADGE_STYLES.keys.toList()[index])) }
+                }
+            }
+            add(Row(getString(R.string.editor_badge_position), getString(BADGE_SIDES.getValue(badge.position)))) {
+                choose(R.string.editor_badge_position, BADGE_SIDES.values.map { getString(it) }) { index ->
+                    edit { it.copy(badge = it.badge.copy(position = BADGE_SIDES.keys.toList()[index])) }
+                }
+            }
+            add(Row(getString(R.string.editor_badge_scale), badge.scale.toString())) {
+                askNumber(R.string.editor_badge_scale, badge.scale.toString(), decimal = true) { v ->
+                    edit { it.copy(badge = it.badge.copy(scale = v)) }
+                }
+            }
+            colour(R.string.editor_badge_background, badge.background, allowAuto = true) { v ->
+                edit { it.copy(badge = it.badge.copy(background = v)) }
+            }
+            colour(R.string.editor_badge_text, badge.text, allowAuto = true) { v ->
+                edit { it.copy(badge = it.badge.copy(text = v)) }
+            }
+        }
+
+        private fun colour(
+            titleRes: Int,
+            value: String,
+            allowAuto: Boolean = false,
+            apply: (String) -> Unit,
+        ) {
+            val shown = if (value == ColorValue.AUTO) getString(R.string.editor_auto) else value
+            add(Row(getString(titleRes), shown)) { askColour(titleRes, value, allowAuto, apply) }
+        }
+
+        private fun size(
+            titleRes: Int,
+            value: Float,
+            apply: (Float) -> Unit,
+        ) {
+            add(Row(getString(titleRes), getString(R.string.editor_sp, trim(value)))) {
+                askNumber(titleRes, trim(value), decimal = true, apply)
+            }
+        }
+
+        private fun pixels(
+            titleRes: Int,
+            value: Int,
+            apply: (Int) -> Unit,
+        ) {
+            add(Row(getString(titleRes), getString(R.string.editor_dp, value))) {
+                askNumber(titleRes, value.toString(), decimal = false) { apply(it.toInt()) }
+            }
+        }
+
+        private fun trim(value: Float): String =
+            if (value == value.toInt().toFloat()) value.toInt().toString() else value.toString()
+
+        private fun add(
+            row: Row,
+            tap: () -> Unit = {},
+        ) {
+            rows += row
+            taps += tap
+        }
+
+        private fun edit(transform: (Theme) -> Theme) {
+            settings.update { it.copy(theme = ThemeEdits.edit(it.theme, transform)) }
         }
     }
 
@@ -1028,7 +1363,7 @@ class SettingsActivity : ThemedActivity() {
                     contentResolver
                         .openInputStream(
                             uri,
-                        )?.use { readAtMost(it, MAX_IMPORT_BYTES).toString(Charsets.UTF_8) }
+                        )?.use { it.readAtMost(MAX_IMPORT_BYTES).toString(Charsets.UTF_8) }
                 } catch (e: IOException) {
                     Logs.w(TAG, "import failed", e)
                     null
@@ -1294,19 +1629,70 @@ class SettingsActivity : ThemedActivity() {
 
     private fun refOf(entry: AppEntry): PackageRef = PackageRef(entry.key.packageName, entry.key.userSerial)
 
-    /** Reads up to [max] bytes; a settings file is a few kilobytes, so anything larger is not one. */
-    private fun readAtMost(
-        input: InputStream,
-        max: Int,
-    ): ByteArray {
-        val out = ByteArrayOutputStream()
-        val buffer = ByteArray(8 * 1024)
-        while (out.size() < max) {
-            val read = input.read(buffer, 0, minOf(buffer.size, max - out.size()))
-            if (read < 0) break
-            out.write(buffer, 0, read)
+    /** Hands the theme to another app as a file it may read for as long as the share lasts. */
+    private fun shareThemeAsFile() {
+        val theme = settings.settings.theme
+        Threads.io.post {
+            val uri = ThemeFiles.share(this, theme)
+            Threads.main.post {
+                if (uri == null) {
+                    toast(getString(R.string.theme_share_failed))
+                } else {
+                    start(
+                        Intent.createChooser(
+                            ThemeFiles.sendIntent(uri, theme.meta.name),
+                            getString(R.string.theme_share_file),
+                        ),
+                    )
+                }
+            }
         }
-        return out.toByteArray()
+    }
+
+    /** The whole theme, packed into a link short enough to paste into a message. */
+    private fun shareThemeAsLink() {
+        val link = ThemeLink.write(settings.settings.theme)
+        if (link == null) {
+            toast(getString(R.string.theme_link_too_long))
+            return
+        }
+        start(Intent.createChooser(ThemeFiles.sendLinkIntent(link), getString(R.string.theme_share_link)))
+    }
+
+    private fun writeThemeTo(uri: Uri) {
+        val text = SettingsCodec.encodeTheme(settings.settings.theme)
+        Threads.io.post {
+            val written =
+                try {
+                    contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) } != null
+                } catch (e: IOException) {
+                    Logs.w(TAG, "could not write the theme", e)
+                    false
+                } catch (e: SecurityException) {
+                    Logs.w(TAG, "not allowed to write the theme", e)
+                    false
+                }
+            Threads.main.post {
+                toast(getString(if (written) R.string.theme_saved else R.string.theme_share_failed))
+            }
+        }
+    }
+
+    /** A theme is read and shown by the screen that reads every theme, wherever it came from. */
+    private fun openTheme(uri: Uri) {
+        start(
+            Intent(Intent.ACTION_VIEW, uri)
+                .setClass(this, ImportActivity::class.java)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+        )
+    }
+
+    private fun start(intent: Intent) {
+        try {
+            startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            toast(getString(R.string.theme_no_app))
+        }
     }
 
     private companion object {
@@ -1344,6 +1730,37 @@ class SettingsActivity : ThemedActivity() {
 
         val DIMS = listOf(0, 15, 25, 35, 50, 65, 80)
 
+        val FAMILIES = listOf("sans-serif", "serif", "monospace", "sans-serif-condensed", "cursive")
+
+        val WEIGHTS = listOf(100, 200, 300, 400, 500, 600, 700, 800, 900)
+
+        val H_ALIGNMENTS =
+            linkedMapOf(
+                HAlign.START to R.string.editor_halign_start,
+                HAlign.CENTER to R.string.editor_halign_center,
+                HAlign.END to R.string.editor_halign_end,
+            )
+
+        val V_ALIGNMENTS =
+            linkedMapOf(
+                VAlign.TOP to R.string.editor_valign_top,
+                VAlign.CENTER to R.string.editor_valign_center,
+                VAlign.BOTTOM to R.string.editor_valign_bottom,
+            )
+
+        val BADGE_STYLES =
+            linkedMapOf(
+                BadgeStyle.CIRCLE to R.string.editor_badge_circle,
+                BadgeStyle.DOT to R.string.editor_badge_dot,
+                BadgeStyle.NUMBER to R.string.editor_badge_number,
+            )
+
+        val BADGE_SIDES =
+            linkedMapOf(
+                BadgePosition.START to R.string.editor_badge_start,
+                BadgePosition.END to R.string.editor_badge_end,
+            )
+
         const val PERCENT = 100
 
         fun directionLabel(angle: Int): Int =
@@ -1357,6 +1774,7 @@ class SettingsActivity : ThemedActivity() {
         const val TAG = "SettingsActivity"
         const val STATE_STACK = "stack"
         const val STATE_ARGS = "args"
+        const val STATE_SCROLL = "scroll"
 
         /** The haptics and edge rows sit above the list of surfaces. */
         const val GESTURE_HEADER_ROWS = 2
