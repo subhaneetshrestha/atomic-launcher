@@ -6,10 +6,12 @@ below is what happens either side of pushing it.
 
 ## Once, before the first release
 
-- [ ] Generate the release keystore and back it up offline — [signing.md](signing.md) §1.
-      Losing it makes every install un-updatable; there is no Play App Signing to recover from.
-- [ ] Add the four repository secrets — [signing.md](signing.md) §3. The workflow fails on the
-      first step without `ATOMIC_KEYSTORE_B64`, so a missing secret costs a tag, not a bad release.
+- [ ] Run `scripts/setup-release-signing.sh`. It generates the keystore, sets the four repository
+      secrets and prints the certificate fingerprint — [signing.md](signing.md) covers what it does
+      and why. The release workflow fails on its first step without `ATOMIC_KEYSTORE_B64`, so a
+      missing secret costs a tag rather than publishing something broken.
+- [ ] Back the keystore and its password up offline. Losing them makes every install un-updatable;
+      there is no Play App Signing to recover from.
 
 ## Every release
 

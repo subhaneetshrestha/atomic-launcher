@@ -33,6 +33,23 @@ published yet; the first will appear under [Releases](https://github.com/subhane
 - Honest about permissions: every privileged feature (notification access, accessibility, usage access) is off by default and explained before the system grant screen.
 - GMS-free: one APK, published on GitHub Releases and built by GitHub Actions ([ADR 0004](docs/decisions/0004-github-only-distribution.md)). Installs update through [Obtainium](https://github.com/ImranR98/Obtainium), which watches releases; the app never updates itself.
 
+## Install
+
+Download the APK from the [latest release](https://github.com/subhaneetshrestha/atomic-launcher/releases/latest)
+and open it. Android will ask you to allow installing from your browser or file manager the first
+time; that prompt is Android's, and the permission can be turned off again straight after.
+
+Check what you downloaded before installing it, if you like:
+
+```sh
+sha256sum -c SHA256SUMS          # published beside the APK
+```
+
+Then hold the home button, or go to Settings → Apps → Default apps → Home app, and choose atomic.
+
+To get updates, point [Obtainium](https://github.com/ImranR98/Obtainium) at this repository; it
+watches releases and installs them. atomic never updates itself and never checks for updates.
+
 ## Build
 
 Prerequisites: JDK 17 and an Android SDK with platform 37 (or 36) and build-tools 36.0.0. On Arch/CachyOS run `fish scripts/setup-toolchain.fish` once.

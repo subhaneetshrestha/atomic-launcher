@@ -5,6 +5,13 @@ in the release is the certificate users check ([ADR 0004](../decisions/0004-gith
 Generate it **before the first build is handed to anyone** — a debug-signed APK cannot be updated by
 a release-signed one, and an APK signed with a different key cannot update this one either.
 
+## 0. The short way
+
+`scripts/setup-release-signing.sh` does sections 1 and 3 in one go: it generates the keystore if
+there is not one, checks the password actually opens it, sets the four repository secrets with
+`gh`, and prints the certificate fingerprint. Read the rest of this file before running it — the
+part that matters is that the keystore is yours to keep, and losing it cannot be undone.
+
 ## 1. Generate the keystore (maintainer, offline, once)
 
 ```sh
