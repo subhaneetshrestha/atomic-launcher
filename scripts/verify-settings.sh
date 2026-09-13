@@ -137,7 +137,13 @@ n=$(grep -c '"component":' <<<"$(sed -n '/"entries"/,/\]/p' <<<"$(settings_json)
 sh input swipe $((width / 2)) $((height / 10)) $((width / 2)) $((height / 10)) 1500 >/dev/null; wait_s 2
 tap_text "About" || ko "About row"
 ui=$(dump); has_text "No crash recorded" "$ui" && ok "About reports no crash" || ko "About reports no crash"
-grep -q 'text="atomic 0.1.0-debug (1)"' <<<"$ui" && ok "About shows the version" || ko "About shows the version"
+# Read the version the build declares rather than hardcoding it: this check is about About
+# reporting what was built, and a literal here goes stale at every release.
+vname=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+vcode=$(sed -n 's/^ *versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
+grep -q "text=\"atomic $vname-debug ($vcode)\"" <<<"$ui" &&
+  ok "About shows the version ($vname-debug ($vcode))" ||
+  ko "About shows the version (expected atomic $vname-debug ($vcode), got: $(grep -o 'text="atomic [^"]*"' <<<"$ui" | head -1))"
 sh input keyevent KEYCODE_HOME >/dev/null; wait_s 1
 info "backup export/import go through the document picker: verify manually"
 
