@@ -10,7 +10,10 @@ Planning-time documents for v1, in reading order:
 5. [Visual identity and motion](2026-09-13-visual-identity-and-motion.md) — the typeface, the icon, the motion system, written after v1 shipped.
 6. [Settings, for 1.1](2026-09-13-settings-1-1.md) — what is wrong with the settings screens and what 1.1 does about it.
 
-Written after v1: items 5 and 6 describe the shipped code and the work planned on top of it.
+7. [Asked for, not yet designed](2026-09-13-research-queue.md) — the queue: wallpaper sources, widgets, a Material settings menu, a scrollable home list, letter gestures and locked hidden apps.
+
+Written after v1: items 5 to 7 describe the shipped code, the work planned on top of it, and what has
+been asked for but not yet researched.
 
 Research behind them: [`docs/research/`](../research/). Decisions: [`docs/decisions/`](../decisions/).
 
