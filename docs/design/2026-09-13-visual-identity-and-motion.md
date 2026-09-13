@@ -41,9 +41,8 @@ phone renders "Info lines" as "İNFO LİNES".
 **Budget.** The release APK is **348 KiB of the 2.5 MiB ceiling**. There is 2.1 MiB of room, and
 the reason to spend some of it is on this page.
 
-**The mark already exists.** The launcher icon is three rounded lines, 40/28/34 wide on a 12-unit
-pitch (`res/drawable/ic_launcher_foreground.xml`) — the home list, drawn. The identity below is
-that mark's logic applied to the rest of the app, not a new one.
+**The mark.** The launcher icon was three rounded lines, 40/28/34 wide on a 12-unit pitch — the
+home list, drawn. It is now the letter, for the reasons in §9.
 
 ## 2. The one decision: the app has a typeface
 
@@ -191,3 +190,39 @@ is ready for the next gesture before the pixels have caught up.
 Everything here was checked with `ktlintCheck test lintRelease assembleRelease checkReleaseApkSize
 gmsGuard` and `scripts/check-manifest-policy.sh`, which is not the same as having been looked at on
 a phone.
+
+## 9. The icon
+
+Three bars is the most drawn glyph in software. It is the hamburger menu, the text-align control
+and the reader-mode button, and at 48px it is all three — a mark that names a category rather than
+a product. The first replacement was the lowercase **a** from the face the app now ships, outlined.
+That was not a mark either: a glyph anyone can set in a text field is not a thing a product is
+known by, which is roughly how the brief came back — *it is just a font*.
+
+What ships is **constructed**. A single-storey **a** whose bowl is an orbit struck at 7 units — the
+thickness of a home row — whose stem is a row stood on end, and whose counter holds a nucleus.
+Three paths, no typeface. The app's own text is IBM Plex Sans, whose **a** is double-storey, so the
+mark and the words beneath it are deliberately different letters rather than the same one twice.
+
+Five were drawn and discarded, and the reasons are worth keeping because they are all the same
+reason — a minimal mark lands in whatever category its silhouette already belongs to:
+
+| Drawn | Reads as |
+|---|---|
+| The face's own **a**, outlined | a font |
+| **a** inside a thin ring | the **@** sign, the moment it is flattened for a themed icon |
+| Three rows crossed at 60° | a sparkle, which now belongs to every AI button on the internet |
+| Rows curved into orbits around a nucleus | a progress spinner |
+| Rows held off-centre to enclose the nucleus | a play button |
+
+Sizing is the part worth writing down, because the first attempt got it wrong. A launcher shows the
+middle 72dp of the 108dp adaptive canvas and throws the rest away, so a mark judged on the whole
+canvas is judged about 1.5× too small. Ink is 36 × 36 — the bowl's own diameter, the stem being
+tangent inside it — and its corners reach 25.5 units from the centre, inside the 33 the safe zone
+guarantees, so no mask shape can cut it. The nucleus is r 4: large enough to be a nucleus at 32px,
+small enough that the counter is still a counter.
+
+`scripts/make-icon.py` draws all three paths from those numbers, and its check mode fails if the
+drawable has drifted from them. The drawable is what ships; the script is how it is regenerated,
+so the path data is never edited by hand. The whole mark costs 72 bytes more than the three bars
+it replaced.
