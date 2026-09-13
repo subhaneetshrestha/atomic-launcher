@@ -2,8 +2,8 @@
 
 A text-only, minimalist Android home launcher. The home screen is a short list of app names you choose; you decide where the list sits, how big the text is, which gestures open which apps or actions, and what the background shows. A fuzzy search finds any app in two or three keystrokes. Themes are plain JSON files you can share.
 
-Status: early development, six of nine phases done. Usable as a launcher, but shareable themes and
-the accessibility-powered actions are still to come, and no signed build has been published yet.
+Status: feature-complete for v1, release engineering in progress. No signed build has been
+published yet; the first will appear under [Releases](https://github.com/subhaneetshrestha/atomic-launcher/releases).
 
 ## What works today
 
@@ -18,6 +18,11 @@ the accessibility-powered actions are still to come, and no signed build has bee
   the window, or images fetched from an address you give it — a list, a feed, a JSON document, a
   Wallhaven search or a single picture — changed on a schedule, on wi-fi only unless you say
   otherwise, with the names going black or white to stay readable over whatever arrives.
+- A theme editor for all of it — colours, typography, layout, legibility, badges, background —
+  and a theme you can share as a file or a link, or take in from one, previewed before it applies.
+- Gestures that lock the screen, open the shade, the recents list, the quick settings or the power
+  dialog, through Android's own accessibility actions or a device-admin lock, each off until you
+  turn it on. Screen time above the list if you grant usage access.
 - Four built-in themes, day/night, a skippable first-run setup, backup and restore through the
   system file picker, and an on-device crash report you can email.
 
@@ -36,10 +41,11 @@ Prerequisites: JDK 17 and an Android SDK with platform 37 (or 36) and build-tool
 git config core.hooksPath .githooks   # once per clone: ktlint formats staged Kotlin on commit
 ./gradlew build                        # compile all modules, run JVM tests, ktlint, lint
 ./gradlew assembleRelease checkReleaseApkSize gmsGuard
+scripts/check-manifest-policy.sh       # permissions allowlist and no GMS in the built APK
 ./gradlew installDebug                 # on a connected device or emulator
 ./gradlew ktlintFormat                 # format everything
 scripts/verify-home.sh emulator-5554 --locale   # per-phase acceptance on a booted emulator
-scripts/verify-settings.sh emulator-5554        # and verify-gestures, -search, -badges, -background
+scripts/verify-settings.sh emulator-5554        # and -gestures, -search, -badges, -background, -themes, -system
 ```
 
 Modules: `:app` (Android), `:core:theme` (settings/theme schema, pure Kotlin), `:core:search` (fuzzy matching, pure Kotlin), `:core:collections` (image collections and the rotation rules, pure Kotlin). Application id: `io.github.subhaneetshrestha.atomic`.
@@ -50,6 +56,8 @@ Modules: `:app` (Android), `:core:theme` (settings/theme schema, pure Kotlin), `
 - [`docs/research/`](docs/research/2026-09-05-android-launcher-capabilities.md) — what Android lets a launcher do, from primary sources.
 - [`docs/decisions/`](docs/decisions/) — architecture decision records.
 - [`docs/verification/`](docs/verification/) — acceptance runs per phase.
+- [`docs/privacy.md`](docs/privacy.md) — what the app reads, what leaves the device, how to check.
+- [`docs/release/`](docs/release/checklist.md) — cutting a release, and signing the key that does it.
 
 ## Support
 

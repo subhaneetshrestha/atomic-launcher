@@ -1,7 +1,9 @@
 # ADR 0004 — GitHub Releases is the only channel for v1
 
 Date: 2026-09-12. Status: accepted. Supersedes decision 4 of
-[ADR 0001](0001-v1-scope-stack-distribution.md) (Google Play and F-Droid alongside GitHub).
+[ADR 0001](0001-v1-scope-stack-distribution.md) (Google Play and F-Droid alongside GitHub), and the
+release-signing line of [ADR 0002](0002-product-identity-defaults-and-conventions.md) (the key is no
+longer uploaded to Play App Signing — see decision 2 below).
 
 ## Context
 
