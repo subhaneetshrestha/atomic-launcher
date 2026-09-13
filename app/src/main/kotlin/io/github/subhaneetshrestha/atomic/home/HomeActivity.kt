@@ -163,7 +163,13 @@ class HomeActivity :
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (searchOverlay.isOpen) searchOverlay.close() else Logs.d(TAG) { "back: nothing to dismiss" }
+                    if (searchOverlay.isOpen) {
+                        searchOverlay.close(
+                            animated = true,
+                        )
+                    } else {
+                        Logs.d(TAG) { "back: nothing to dismiss" }
+                    }
                 }
             },
         )

@@ -3,6 +3,7 @@ package io.github.subhaneetshrestha.atomic.settings
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
@@ -67,6 +68,7 @@ import io.github.subhaneetshrestha.atomic.core.theme.ThemeLink
 import io.github.subhaneetshrestha.atomic.core.theme.VAlign
 import io.github.subhaneetshrestha.atomic.home.DefaultHomePrompt
 import io.github.subhaneetshrestha.atomic.home.HomeListModel
+import io.github.subhaneetshrestha.atomic.home.ThemeApplier
 import io.github.subhaneetshrestha.atomic.notifications.NotificationAccess
 import io.github.subhaneetshrestha.atomic.settings.grant.Grants
 import io.github.subhaneetshrestha.atomic.settings.grant.InstallSourceProbe
@@ -74,6 +76,7 @@ import io.github.subhaneetshrestha.atomic.settings.grant.Restriction
 import io.github.subhaneetshrestha.atomic.share.ImportActivity
 import io.github.subhaneetshrestha.atomic.share.ThemeFiles
 import io.github.subhaneetshrestha.atomic.system.DeviceAdminLock
+import io.github.subhaneetshrestha.atomic.ui.Motion
 import io.github.subhaneetshrestha.atomic.util.Logs
 import io.github.subhaneetshrestha.atomic.util.Threads
 import io.github.subhaneetshrestha.atomic.util.readAtMost
@@ -106,9 +109,15 @@ class SettingsActivity : ThemedActivity() {
     private lateinit var container: FrameLayout
     private val stack = ArrayDeque<Screen>()
 
+    /** The theme's typeface, so settings is drawn in the font the home screen is drawn in. */
+    private lateinit var face: Typeface
+
+    /** The list on screen, so a theme edit can repaint it without rebuilding the screen. */
+    private var liveAdapter: RowAdapter? = null
+
     /**
-     * Editing a theme changes the colours this screen is drawn in, so the activity is recreated on
-     * every edit. Without this, changing the badge colour would send the list back to the top.
+     * A theme edit no longer rebuilds this activity, but a rotation and a night-mode change still
+     * do, and neither should send a list the user was halfway down back to the top.
      */
     private var restoreScroll = 0
 
@@ -127,7 +136,17 @@ class SettingsActivity : ThemedActivity() {
     private val documentListener: (Settings, Settings) -> Unit = { old, new ->
         // Everything about a theme but its background decides the colours this screen is drawn in.
         val looksDifferent = old.theme.copy(background = new.theme.background) != new.theme
-        if (looksDifferent || old.appearance != new.appearance) recreate() else stack.lastOrNull()?.refresh()
+        when {
+            // Night mode changes the resource configuration, which only a new activity can pick up.
+            old.appearance != new.appearance -> recreate()
+
+            // Everything else repaints in place. This screen is the preview for the editor above
+            // it, and an editor that blinks the whole activity between two colours cannot be used
+            // to choose between them.
+            looksDifferent -> recolour()
+
+            else -> stack.lastOrNull()?.refresh()
+        }
     }
     private val backgroundListener = BackgroundController.Listener { stack.lastOrNull()?.refresh() }
 
@@ -135,6 +154,7 @@ class SettingsActivity : ThemedActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         colors = atomicApp.resolvedColors(this)
+        face = ThemeApplier(this).typeface(settings.settings.toHomeSettings().font)
         window.decorView.setBackgroundColor(colors.background)
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -146,11 +166,18 @@ class SettingsActivity : ThemedActivity() {
         title =
             TextView(this).apply {
                 setTextColor(colors.text)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                typeface = face
+                // Large text sets tighter than the body it names.
+                letterSpacing = -0.01f
                 val h = dp(20)
                 setPadding(h, dp(16), h, dp(8))
                 gravity = Gravity.CENTER_VERTICAL
                 minHeight = dp(56)
+                // Eighteen screens deep, the only way out was the system gesture. The header is
+                // the one thing on every screen, so it is the thing that goes back.
+                isFocusable = true
+                setOnClickListener { if (stack.size > 1) pop() }
             }
         container = FrameLayout(this)
         root.addView(
@@ -237,26 +264,80 @@ class SettingsActivity : ThemedActivity() {
     /** Back out to a screen already on the stack, after a choice deeper in has been made. */
     private fun popTo(id: ScreenId) {
         while (stack.size > 1 && stack.last().id != id) stack.removeLast()
-        stack.lastOrNull()?.let(::show)
+        stack.lastOrNull()?.let { show(it, forward = false) }
     }
 
     private fun push(screen: Screen) {
         stack.addLast(screen)
-        show(screen)
+        show(screen, forward = true)
     }
 
     private fun pop() {
         stack.removeLast()
-        stack.lastOrNull()?.let(::show)
+        stack.lastOrNull()?.let { show(it, forward = false) }
     }
 
-    private fun show(screen: Screen) {
-        title.setText(screen.titleRes)
-        container.removeAllViews()
-        container.addView(
-            screen.createView(),
-            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT),
-        )
+    private fun show(
+        screen: Screen,
+        forward: Boolean,
+    ) {
+        val deeper = stack.size > 1
+        val name = getString(screen.titleRes)
+        title.text = if (deeper) getString(R.string.settings_back_to, name) else name
+        title.isClickable = deeper
+        title.contentDescription = if (deeper) getString(R.string.settings_back) else null
+        if (Motion.enabled) {
+            title.alpha = 0f
+            title
+                .animate()
+                .alpha(1f)
+                .setDuration(Motion.PUSH_MS)
+                .setInterpolator(Motion.enter)
+        }
+        // Whatever list was on screen is leaving with the old view; the new screen claims this
+        // again from list() if it has one.
+        liveAdapter = null
+        with(Motion) { container.swapChild(screen.createView(), forward) }
+    }
+
+    /**
+     * Repaints everything on screen in the theme's new colours, over a fifth of a second, without
+     * rebuilding anything. The list keeps its place because it is never recreated; the screen is
+     * rebuilt once at the end so that anything colour cannot reach — prose pages, a changed font —
+     * catches up.
+     */
+    private fun recolour() {
+        val from = colors
+        val to = atomicApp.resolvedColors(this)
+        face = ThemeApplier(this).typeface(settings.settings.toHomeSettings().font)
+        Motion.tween { fraction ->
+            colors =
+                from.copy(
+                    background = Motion.blend(from.background, to.background, fraction),
+                    text = Motion.blend(from.text, to.text, fraction),
+                    textSecondary = Motion.blend(from.textSecondary, to.textSecondary, fraction),
+                    accent = Motion.blend(from.accent, to.accent, fraction),
+                )
+            window.decorView.setBackgroundColor(colors.background)
+            title.setTextColor(colors.text)
+            liveAdapter?.let {
+                it.colors = colors
+                it.typeface = face
+                it.notifyDataSetChanged()
+            }
+            if (fraction == 1f) {
+                colors = to
+                stack.lastOrNull()?.let { screen ->
+                    if (liveAdapter ==
+                        null
+                    ) {
+                        show(screen, forward = true)
+                    } else {
+                        screen.refresh()
+                    }
+                }
+            }
+        }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -267,6 +348,9 @@ class SettingsActivity : ThemedActivity() {
         onLongClick: ((Int) -> Boolean)? = null,
     ): ListView =
         ListView(this).apply {
+            adapter.colors = colors
+            adapter.typeface = face
+            liveAdapter = adapter
             this.adapter = adapter
             divider = null
             dividerHeight = 0
@@ -283,10 +367,13 @@ class SettingsActivity : ThemedActivity() {
         paragraphs: List<String>,
         actions: List<Pair<String, () -> Unit>>,
     ): View {
+        // Prose gets a measure: about 66 characters, centred, so a disclosure does not run the
+        // full width of a tablet where nobody can find the start of the next line.
+        val side = maxOf(dp(20), (resources.displayMetrics.widthPixels - dp(560)) / 2)
         val column =
             LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(20), dp(4), dp(20), dp(24))
+                setPadding(side, dp(4), side, dp(24))
             }
         for (paragraph in paragraphs) {
             column.addView(
@@ -294,6 +381,7 @@ class SettingsActivity : ThemedActivity() {
                     text = paragraph
                     setTextColor(colors.text)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    typeface = face
                     setLineSpacing(0f, 1.2f)
                     setPadding(0, dp(8), 0, dp(8))
                 },
@@ -305,6 +393,7 @@ class SettingsActivity : ThemedActivity() {
                     text = label
                     setTextColor(colors.accent)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+                    typeface = face
                     gravity = Gravity.CENTER_VERTICAL
                     minHeight = dp(56)
                     isClickable = true
@@ -1467,7 +1556,7 @@ class SettingsActivity : ThemedActivity() {
                         "Android ${env.androidRelease} (API ${env.sdkInt})",
                     ),
                     Row(getString(R.string.about_source), getString(R.string.source_url)),
-                    Row(getString(R.string.about_license)),
+                    Row(getString(R.string.about_license), getString(R.string.about_typeface)),
                     Row(
                         getString(R.string.about_crash_share),
                         getString(if (hasCrash) R.string.about_crash_recorded else R.string.about_crash_none),
@@ -1911,7 +2000,8 @@ class SettingsActivity : ThemedActivity() {
                 InfoLineId.SCREEN_TIME to R.string.info_screen_time,
             )
 
-        val FAMILIES = listOf("sans-serif", "serif", "monospace", "sans-serif-condensed", "cursive")
+        val FAMILIES =
+            listOf(ThemeApplier.BUNDLED_SANS, "sans-serif", "serif", "monospace", "sans-serif-condensed", "cursive")
 
         val WEIGHTS = listOf(100, 200, 300, 400, 500, 600, 700, 800, 900)
 

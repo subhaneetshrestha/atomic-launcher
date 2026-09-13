@@ -4,6 +4,9 @@
     <string name="default_home_banner">Set atomic as your home app</string>
     <string name="launch_failed">Could not open %1$s</string>
     <string name="settings_title">Settings</string>
+    <!-- The chevron is the way back out of a nested settings screen; %1$s is that screen's name. -->
+    <string name="settings_back_to">\u2039\u00a0%1$s</string>
+    <string name="settings_back">Back</string>
     <string name="menu_remove_from_home">Remove from home</string>
     <string name="menu_add_to_home">Add to home</string>
     <string name="menu_rename">Rename</string>
@@ -40,6 +43,7 @@
     <string name="about_version">atomic %1$s (%2$d)</string>
     <string name="about_source">Source code and issues</string>
     <string name="about_license">Apache License 2.0</string>
+    <string name="about_typeface">Typeface: IBM Plex Sans, SIL Open Font License 1.1</string>
     <string name="about_crash_none">No crash recorded</string>
     <string name="about_crash_recorded">A crash was recorded</string>
     <string name="about_crash_share">Share the last crash report</string>

@@ -2,6 +2,8 @@ package io.github.subhaneetshrestha.atomic.home
 
 import android.content.Context
 import android.graphics.Typeface
+import android.graphics.fonts.Font
+import android.graphics.fonts.FontFamily
 import android.os.Build
 import android.util.TypedValue
 import android.view.Gravity
@@ -24,6 +26,21 @@ import kotlin.math.roundToInt
 class ThemeApplier(
     private val context: Context,
 ) {
+    companion object {
+        /** The family name a theme asks for to get the face atomic ships. */
+        const val BUNDLED_SANS = "atomic-sans"
+
+        /** The variable font's own range; asking outside it gets the nearest end. */
+        const val BUNDLED_MIN_WEIGHT = 100
+        const val BUNDLED_MAX_WEIGHT = 700
+
+        /**
+         * Built once per weight for the whole process: parsing 120 KB of font on every theme
+         * application would be paid on every home render. Main thread only, like every view.
+         */
+        private val cached = HashMap<Int, Typeface>()
+    }
+
     fun dp(value: Int): Int =
         TypedValue
             .applyDimension(
@@ -33,12 +50,46 @@ class ThemeApplier(
             ).roundToInt()
 
     fun typeface(font: FontSpec): Typeface {
+        bundled(font)?.let { return it }
         val family = Typeface.create(font.family, Typeface.NORMAL)
         return if (Build.VERSION.SDK_INT >= 28) {
             Typeface.create(family, font.weight.coerceIn(1, 1000), font.italic)
         } else {
             Typeface.create(family, legacyStyle(font))
         }
+    }
+
+    /**
+     * atomic's own face: one variable font covering every weight the editor offers, which is what
+     * makes the app look like itself on a phone whose system font is somebody else's.
+     *
+     * Null below Android 10, where it stays deliberately unused. A [Typeface] built from a file
+     * carries no fallback chain of its own, and only [Typeface.CustomFallbackBuilder] (API 29) can
+     * give it one — without that, an app named in Japanese, Greek or Hindi would come back as a row
+     * of empty boxes. A system font that is not ours beats a home screen that cannot be read.
+     */
+    private fun bundled(font: FontSpec): Typeface? {
+        if (font.family != BUNDLED_SANS || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val weight = font.weight.coerceIn(BUNDLED_MIN_WEIGHT, BUNDLED_MAX_WEIGHT)
+        val face = cached[weight] ?: build(weight)?.also { cached[weight] = it } ?: return null
+        // The face is upright; asking for italic here is what tells the platform to slant it.
+        return if (font.italic) Typeface.create(face, weight, true) else face
+    }
+
+    private fun build(weight: Int): Typeface? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return runCatching {
+            val font =
+                Font
+                    .Builder(context.resources, R.font.atomic_sans)
+                    .setFontVariationSettings("'wght' $weight")
+                    .setWeight(weight)
+                    .build()
+            Typeface
+                .CustomFallbackBuilder(FontFamily.Builder(font).build())
+                .setSystemFallback("sans-serif")
+                .build()
+        }.getOrNull()
     }
 
     private fun legacyStyle(font: FontSpec): Int {
@@ -136,8 +187,12 @@ class ThemeApplier(
         horizontalGravity: Int,
         minHeightDp: Int = 48,
         maxFontScale: Float? = null,
+        trackingEm: Float = 0f,
     ) {
         view.typeface = typeface(font)
+        // Large text sets loose by default; the clock is the one place where that reads as a gap
+        // between the digits rather than as a time.
+        view.letterSpacing = trackingEm
         if (maxFontScale == null) {
             view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
         } else {

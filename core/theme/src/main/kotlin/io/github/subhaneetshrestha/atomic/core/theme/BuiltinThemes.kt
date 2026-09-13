@@ -10,9 +10,12 @@ object BuiltinThemes {
                     name = "Ink",
                     author = "atomic",
                     license = "CC0-1.0",
-                    description = "White text on black. Always legible.",
+                    description = "White text on black, in atomic's own face.",
                 ),
             colors = Colors(),
+            // The face the app ships, by the name ThemeApplier answers to. A phone older than
+            // Android 10 draws this theme in its own sans instead; nothing else changes.
+            typography = Typography(family = "atomic-sans"),
         )
 
     val paper: Theme =

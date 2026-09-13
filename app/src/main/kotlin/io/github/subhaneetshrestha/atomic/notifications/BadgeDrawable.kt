@@ -1,5 +1,6 @@
 package io.github.subhaneetshrestha.atomic.notifications
 
+import android.animation.ValueAnimator
 import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.Paint
@@ -9,6 +10,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import io.github.subhaneetshrestha.atomic.core.theme.Badge
 import io.github.subhaneetshrestha.atomic.core.theme.BadgeStyle
+import io.github.subhaneetshrestha.atomic.ui.Motion
 import kotlin.math.roundToInt
 
 /**
@@ -26,6 +28,10 @@ class BadgeDrawable : Drawable() {
     private var metrics = EMPTY
     private var style = BadgeStyle.CIRCLE
     private var label = ""
+
+    /** The last count drawn, so a badge can tell an arrival from a redraw. */
+    private var drawnCount = 0
+    private var pop = 1f
 
     /** Space the row should leave between the name and this badge. */
     val gapPx: Int get() = metrics.gapPx.roundToInt()
@@ -45,8 +51,13 @@ class BadgeDrawable : Drawable() {
         if (count <= 0) {
             metrics = EMPTY
             label = ""
+            drawnCount = 0
             return false
         }
+        // Something arrived while you were looking at the screen. Not a first draw, not a redraw
+        // after a settings change: only a number that went up.
+        val arrived = count > drawnCount && drawnCount > 0
+        drawnCount = count
         style = badge.style
         label = BadgeGeometry.label(count, badge.style)
         labelPaint.typeface = typeface
@@ -57,6 +68,7 @@ class BadgeDrawable : Drawable() {
         // A plain number has no shape behind it, so the digits themselves take the badge's colour.
         labelPaint.color = if (badge.style == BadgeStyle.NUMBER) background else text
         setBounds(0, 0, metrics.widthPx.roundToInt(), metrics.heightPx.roundToInt())
+        if (arrived) popIn()
         invalidateSelf()
         return true
     }
@@ -65,17 +77,37 @@ class BadgeDrawable : Drawable() {
 
     override fun getIntrinsicHeight(): Int = metrics.heightPx.roundToInt()
 
+    private fun popIn() {
+        if (!Motion.enabled) return
+        ValueAnimator.ofFloat(1f, 1.15f, 1f).apply {
+            duration = Motion.BADGE_MS
+            interpolator = Motion.ease
+            addUpdateListener {
+                pop = it.animatedValue as Float
+                invalidateSelf()
+            }
+            start()
+        }
+    }
+
     override fun draw(canvas: Canvas) {
         if (metrics === EMPTY) return
         val bounds = bounds
+        val popped = pop != 1f
+        if (popped) {
+            canvas.save()
+            canvas.scale(pop, pop, bounds.exactCenterX(), bounds.exactCenterY())
+        }
         if (style != BadgeStyle.NUMBER) {
             box.set(bounds)
             canvas.drawRoundRect(box, metrics.radiusPx, metrics.radiusPx, shapePaint)
         }
-        if (label.isEmpty()) return
-        val font = labelPaint.fontMetrics
-        val baseline = bounds.exactCenterY() - (font.ascent + font.descent) / 2f
-        canvas.drawText(label, bounds.exactCenterX(), baseline, labelPaint)
+        if (label.isNotEmpty()) {
+            val font = labelPaint.fontMetrics
+            val baseline = bounds.exactCenterY() - (font.ascent + font.descent) / 2f
+            canvas.drawText(label, bounds.exactCenterX(), baseline, labelPaint)
+        }
+        if (popped) canvas.restore()
     }
 
     override fun setAlpha(alpha: Int) {
