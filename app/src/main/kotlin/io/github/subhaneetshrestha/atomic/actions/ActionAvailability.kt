@@ -58,14 +58,17 @@ class ActionAvailability(
 
     private fun ofBuiltin(id: BuiltinId): Availability =
         when {
+            // What Android cannot do is asked first, because an action this Android is too old for
+            // is not one atomic has yet to build: a screenshot on Android 8 is missing from Android,
+            // not from here, and saying "a later version of atomic" would blame the wrong thing.
+            env.sdkInt < BuiltinActions.minSdk(id) -> {
+                Availability.Unsupported(UnsupportedReason.NEEDS_NEWER_ANDROID)
+            }
+
             // A surface this build does not have cannot be offered, nor can the user be asked to
             // allow something that is not there to allow.
             !env.isBuilt(id) -> {
                 Availability.Unsupported(UnsupportedReason.NOT_IN_THIS_VERSION)
-            }
-
-            env.sdkInt < BuiltinActions.minSdk(id) -> {
-                Availability.Unsupported(UnsupportedReason.NEEDS_NEWER_ANDROID)
             }
 
             id == BuiltinId.FLASHLIGHT_TOGGLE && !env.hasTorch -> {

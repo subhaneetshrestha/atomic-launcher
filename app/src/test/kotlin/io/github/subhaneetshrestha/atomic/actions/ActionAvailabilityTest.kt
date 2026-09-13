@@ -51,6 +51,21 @@ class ActionAvailabilityTest {
     }
 
     @Test
+    fun `an action Android is too old for blames Android, not atomic`() {
+        // A screenshot needs Android 9. On Android 8 the service cannot be asked for it, so it is
+        // not among the ones offered there — but the reason is Android's age, not a missing
+        // feature of this launcher, and the two are told apart.
+        env.sdkInt = 26
+        env.unbuilt += BuiltinId.SCREENSHOT
+
+        assertEquals(
+            Availability.Unsupported(UnsupportedReason.NEEDS_NEWER_ANDROID),
+            of(BuiltinId.SCREENSHOT),
+            "Android 8 has no screenshot action; a later atomic would not add one",
+        )
+    }
+
+    @Test
     fun `an action written by a newer version cannot be carried out, and doing nothing always can`() {
         assertEquals(
             Availability.Unsupported(UnsupportedReason.UNKNOWN_ACTION),

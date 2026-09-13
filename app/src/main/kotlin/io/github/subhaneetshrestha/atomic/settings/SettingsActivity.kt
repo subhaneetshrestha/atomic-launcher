@@ -966,6 +966,13 @@ class SettingsActivity : ThemedActivity() {
                     ),
                 ) {
                     if (needsAccess && !line.enabled) {
+                        // Turning the line on is what the tap asked for; the access is what it
+                        // needs to say anything. Asking first and leaving the line off would make
+                        // a granted access look ignored, so the line goes on either way and says
+                        // what it is missing until it is given.
+                        settings.update {
+                            it.copy(homeInfo = it.homeInfo.withLine(id, line.copy(enabled = true)))
+                        }
                         push(GrantScreen(ConsentKind.USAGE_ACCESS.ordinal))
                     } else {
                         settings.update {
