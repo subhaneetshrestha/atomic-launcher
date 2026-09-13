@@ -47,6 +47,13 @@ sha256sum -c SHA256SUMS          # published beside the APK
 
 Then hold the home button, or go to Settings → Apps → Default apps → Home app, and choose atomic.
 
+Every merge to `main` also publishes the build that came out of it to the
+[`edge`](https://github.com/subhaneetshrestha/atomic-launcher/releases/tag/edge) prerelease. That
+one is a separate app — the id ends `.edge`, the version ends `-edge` — so it installs beside a
+release rather than replacing it, and you can try the head of the branch without giving up the home
+screen you rely on. Its version code moves with every build, so one edge build updates the last, and
+Obtainium will follow it if you turn prereleases on.
+
 To get updates, point [Obtainium](https://github.com/ImranR98/Obtainium) at this repository; it
 watches releases and installs them. atomic never updates itself and never checks for updates.
 

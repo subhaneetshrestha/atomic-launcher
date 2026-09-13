@@ -25,6 +25,7 @@ import io.github.subhaneetshrestha.atomic.core.search.SearchResult
 import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.home.ThemeApplier
 import io.github.subhaneetshrestha.atomic.settings.HomeSettings
+import io.github.subhaneetshrestha.atomic.ui.Motion
 
 /**
  * The search field and its results, and with nothing typed, the list of every app. The field sits
@@ -53,7 +54,9 @@ class SearchOverlay(
     private var keyboardWanted = false
     private var rows: List<Row> = emptyList()
 
-    val isOpen: Boolean get() = visibility == VISIBLE
+    /** False the moment a close is asked for, not when its fade ends: gestures re-arm on this. */
+    val isOpen: Boolean get() = visibility == VISIBLE && !closing
+    private var closing = false
 
     private sealed class Row {
         data class App(
@@ -71,7 +74,7 @@ class SearchOverlay(
         orientation = VERTICAL
         visibility = GONE
         isClickable = true
-        setOnClickListener { close() }
+        setOnClickListener { close(animated = true) }
 
         list.adapter = adapter
         list.divider = null
@@ -139,17 +142,33 @@ class SearchOverlay(
         applier.applyText(field, settings.font, settings.drawerTextSizeSp, colors.text, Gravity.START)
         field.setHintTextColor(colors.textSecondary)
         field.setText("")
-        visibility = VISIBLE
+        closing = false
         search()
+        with(Motion) { reveal(dp(context, Motion.RISE_DP)) }
         if (withKeyboard && settings.autoShowKeyboard) showKeyboard() else field.clearFocus()
     }
 
-    fun close() {
+    /**
+     * Closes the overlay. [animated] is for the ways a person closes it — back, or a tap on the
+     * empty space; the lifecycle ones (leaving the launcher, the Home key) are instant, because
+     * there is no one watching a fade on a screen that is already going away.
+     *
+     * The keyboard goes and [onClose] fires straight away whatever happens, and [isOpen] is false
+     * from that moment: the home screen has to be ready for the next gesture before the pixels
+     * have caught up.
+     */
+    fun close(animated: Boolean = false) {
         if (!isOpen) return
-        visibility = GONE
+        closing = true
         field.setText("")
         hideKeyboard()
         onClose?.invoke()
+        if (animated) {
+            with(Motion) { dismiss { closing = false } }
+        } else {
+            visibility = GONE
+            closing = false
+        }
     }
 
     /**

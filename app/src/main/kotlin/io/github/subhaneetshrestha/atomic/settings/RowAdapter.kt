@@ -1,6 +1,7 @@
 package io.github.subhaneetshrestha.atomic.settings
 
 import android.content.Context
+import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
@@ -9,6 +10,7 @@ import android.widget.BaseAdapter
 import android.widget.CheckedTextView
 import android.widget.TextView
 import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
+import java.util.Locale
 
 /** A settings row: a label, an optional detail line, and an optional check state (null = plain row). */
 data class Row(
@@ -22,12 +24,20 @@ data class Row(
     val enabled: Boolean = true,
 )
 
-/** Themed rows over the platform list layouts; check state is owned here, not by ListView's choice mode. */
+/**
+ * Themed rows over the platform list layouts; check state is owned here, not by ListView's choice
+ * mode. [colors] and [typeface] are variables because a theme edit repaints the rows in place
+ * rather than rebuilding the screen; both are set by `SettingsActivity.list`, which every screen's
+ * list goes through.
+ */
 class RowAdapter(
     private val context: Context,
-    private val colors: ResolvedColors,
+    var colors: ResolvedColors,
     var rows: List<Row>,
 ) : BaseAdapter() {
+    /** The theme's own face. Settings is drawn in the font the home screen is drawn in. */
+    var typeface: Typeface? = null
+
     override fun getCount(): Int = rows.size
 
     override fun getItem(position: Int): Row = rows[position]
@@ -63,7 +73,11 @@ class RowAdapter(
         if (row.isHeader) {
             val title = view.findViewById<TextView>(android.R.id.text1)
             style(title, colors.textSecondary, 13f)
-            title.text = row.label.uppercase()
+            // Uppercase at 13sp closes up without tracking; this is the difference between a
+            // section header and an unstyled Android list. ROOT, or a Turkish phone reads
+            // "Info lines" back as "İNFO LİNES".
+            title.letterSpacing = HEADER_TRACKING
+            title.text = row.label.uppercase(Locale.ROOT)
             view.alpha = 1f
             view.minimumHeight = (40 * context.resources.displayMetrics.density).toInt()
             return view
@@ -88,7 +102,13 @@ class RowAdapter(
     }
 
     private companion object {
-        const val DIMMED = 0.45f
+        /**
+         * A row that cannot be chosen, over the background it sits on. Dark ink on Paper's warm
+         * white is the worst case: at the 0.45 this used to be it came to 2.6:1, under the 3:1 a
+         * disabled control still owes the person reading it.
+         */
+        const val DIMMED = 0.6f
+        const val HEADER_TRACKING = 0.08f
     }
 
     private fun style(
@@ -98,5 +118,7 @@ class RowAdapter(
     ) {
         view.setTextColor(color)
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+        typeface?.let { view.typeface = it }
+        view.letterSpacing = 0f
     }
 }

@@ -81,7 +81,15 @@ class InfoLinesView(
         this.config = config
         val gravity = applier.horizontalGravity(view.horizontalAlignment)
         val sizes = theme.typography.sizes
-        applier.applyText(clock, view.font, sizes.clockSp, colors.text, gravity, maxFontScale = CLOCK_MAX_FONT_SCALE)
+        applier.applyText(
+            clock,
+            view.font,
+            sizes.clockSp,
+            colors.text,
+            gravity,
+            maxFontScale = CLOCK_MAX_FONT_SCALE,
+            trackingEm = CLOCK_TRACKING_EM,
+        )
         applier.applyText(date, view.font, sizes.infoSp, colors.textSecondary, gravity)
         applier.applyText(battery, view.font, sizes.infoSp, colors.textSecondary, gravity)
         applier.applyText(screenTime, view.font, sizes.infoSp, colors.textSecondary, gravity)
@@ -228,6 +236,9 @@ class InfoLinesView(
         const val MINUTE_MS = 60_000L
 
         const val HOUR_MS = 60 * MINUTE_MS
+
+        /** Tighter than the body text under it, because 48sp of anything sets loose. */
+        const val CLOCK_TRACKING_EM = -0.02f
 
         /** The clock is decoration: it follows the font size setting only up to this factor. */
         const val CLOCK_MAX_FONT_SCALE = 1.3f

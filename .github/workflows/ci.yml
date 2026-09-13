@@ -18,6 +18,10 @@ jobs:
     name: Build, test, lint, gates
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Writable only so a green main build can publish the edge release below; pull requests from
+    # forks get a read-only token whatever this says.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -31,15 +35,91 @@ jobs:
           validate-wrappers: true
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      # The keystore is a secret restored to a temporary file, never a file in the repository. This
+      # is what every Android project that publishes from CI does — Lawnchair, Kvaesitso and Pachli
+      # all decode a base64 secret into the runner and let it die with the job.
+      #
+      # A pull request gets no secrets, and neither does a fork, so those builds stay unsigned and
+      # publish nothing — which is also what happens here until scripts/setup-release-signing.sh has
+      # been run once. A missing key makes the build say so; it does not make it fail.
+      - name: Restore signing keystore
+        id: keystore
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          ATOMIC_KEYSTORE_B64: ${{ secrets.ATOMIC_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$ATOMIC_KEYSTORE_B64" ]; then
+            echo "No ATOMIC_KEYSTORE_B64 secret — building unsigned and publishing nothing."
+            echo "No signing key: run \`scripts/setup-release-signing.sh\` once, and every merge from then on publishes an edge build." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          printf '%s' "$ATOMIC_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ATOMIC_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          # Makes this build an edge build: a date-based versionCode so one edge build updates the
+          # last, and with it a `.edge` application id (app/build.gradle.kts) so it installs beside
+          # a release rather than making the next release a downgrade. Two digits of run number
+          # separate two merges on one day; they wrap every hundred runs, which costs one edge
+          # build its update and fixes itself the next day.
+          echo "ATOMIC_EDGE_VERSION_CODE=$(date -u +%Y%m%d)$(printf '%02d' "$((GITHUB_RUN_NUMBER % 100))")" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
       # One invocation shares the configuration cache: ktlint, JVM tests for every module, lint,
       # the release APK, the 2.5 MiB size gate and the GMS-free classpath gate. No app bundle:
-      # GitHub Releases is the only channel (ADR 0004).
+      # GitHub Releases is the only channel (ADR 0004). The three passwords are empty on a pull
+      # request, where ATOMIC_KEYSTORE is unset and Gradle attaches no signing config at all.
       - name: Build
+        env:
+          ATOMIC_KEYSTORE_PASSWORD: ${{ secrets.ATOMIC_KEYSTORE_PASSWORD }}
+          ATOMIC_KEY_ALIAS: ${{ secrets.ATOMIC_KEY_ALIAS }}
+          ATOMIC_KEY_PASSWORD: ${{ secrets.ATOMIC_KEY_PASSWORD }}
         run: ./gradlew --no-daemon --stacktrace ktlintCheck test lintRelease assembleRelease checkReleaseApkSize gmsGuard
 
       # Reads the built APK, not the sources: a merged manifest can declare what no source file does.
       - name: Manifest and DEX policy gate
         run: scripts/check-manifest-policy.sh
+
+      # Every gate above has passed on this commit, so main's APK goes out where a phone can reach
+      # it: one rolling `edge` prerelease, replaced whole each time, always the head of main. A
+      # prerelease on purpose — /releases/latest must keep pointing at the last tagged version,
+      # which is what the README tells people to install and what Obtainium follows by default.
+      - name: Publish the edge build
+        if: steps.keystore.outputs.signed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          out=app/build/outputs/apk/release
+          apk=$(ls "$out"/*.apk | head -1)
+          # Gradle attaches the signing config only when ATOMIC_KEYSTORE reaches it. If that ever
+          # fails quietly the build still succeeds and produces app-release-unsigned.apk, which the
+          # rest of this step would happily rename and publish.
+          case "$apk" in *unsigned*) echo "Built $apk — the signing config was not attached."; exit 1 ;; esac
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$apksigner" verify --print-certs "$apk"
+
+          mv "$apk" "$out/atomic-launcher-edge.apk"
+          (cd "$out" && sha256sum atomic-launcher-edge.apk > SHA256SUMS)
+
+          repo=https://github.com/$GITHUB_REPOSITORY
+          printf '%s\n\n%s\n' \
+            "Automatic build of \`main\` at [\`${GITHUB_SHA:0:7}\`]($repo/commit/$GITHUB_SHA), signed with the release key and replaced on every merge." \
+            "A separate app: the id ends \`.edge\` and the name ends \`-edge\`, so it installs beside a release instead of replacing it, and its version code moves with every build so one edge build updates the last. Point [Obtainium](https://github.com/ImranR98/Obtainium) at this repository with prereleases enabled to follow it, or take the [latest release]($repo/releases/latest) for something to keep." \
+            > "$RUNNER_TEMP/notes.md"
+
+          # A tag cannot be moved, so the rolling release is replaced rather than edited. The second
+          # command covers a tag left behind by a half-finished delete. Each asset's URL is fixed by
+          # the tag name, so it survives all of this.
+          gh release delete edge --yes --cleanup-tag 2>/dev/null ||
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/edge" >/dev/null 2>&1 || true
+          gh release create edge --target "$GITHUB_SHA" --prerelease \
+            --title "edge — latest main" --notes-file "$RUNNER_TEMP/notes.md" \
+            "$out/atomic-launcher-edge.apk" "$out/SHA256SUMS" app/build/outputs/mapping/release/mapping.txt
+
+          {
+            echo "### Published to the edge release"
+            echo
+            gh release view edge --json assets --jq '.assets[].name | "- " + .'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Size summary
         if: always()

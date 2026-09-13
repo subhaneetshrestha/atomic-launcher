@@ -9,6 +9,7 @@ import io.github.subhaneetshrestha.atomic.apps.AppEntry
 import io.github.subhaneetshrestha.atomic.core.theme.ResolvedColors
 import io.github.subhaneetshrestha.atomic.notifications.BadgeDrawable
 import io.github.subhaneetshrestha.atomic.settings.HomeSettings
+import io.github.subhaneetshrestha.atomic.ui.Motion
 
 /**
  * The home list: a vertical LinearLayout of TextView rows. For 1 to 16 rows this beats ListView
@@ -67,6 +68,7 @@ class HomeListView(
             ellipsize = TextUtils.TruncateAt.END
             isClickable = true
             isFocusable = true
+            stateListAnimator = Motion.pressScale()
             setOnClickListener { view ->
                 val entry = view.tag as? AppEntry ?: return@setOnClickListener
                 onRowClick?.invoke(entry, view)
