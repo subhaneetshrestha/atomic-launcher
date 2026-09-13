@@ -4,6 +4,31 @@ GitHub Releases is the only channel ([ADR 0004](../decisions/0004-github-only-di
 A tag does the work: `.github/workflows/release.yml` builds, signs, gates and publishes. Everything
 below is what happens either side of pushing it.
 
+## Between releases
+
+Every push to `main` that passes CI publishes the same APK to a rolling `edge` prerelease
+(`.github/workflows/ci.yml`): `atomic-launcher-edge.apk`, its `SHA256SUMS` and `mapping.txt`,
+replaced on every merge, signed with the release key from the same four secrets a tag uses.
+
+The keystore is only ever a secret decoded into the runner's temporary directory, never a file in
+this repository — the same shape as every Android project that publishes from CI. Until
+`scripts/setup-release-signing.sh` has been run there is no secret: `main` still builds and gates
+as before, publishes nothing, and says so in the run summary. Pull requests, and forks, never see
+the secret at all, so their builds stay unsigned and publish nothing.
+
+An edge build is a separate app. CI sets `ATOMIC_EDGE_VERSION_CODE` to `YYYYMMDD` plus two digits
+of the run number, and `app/build.gradle.kts` answers by suffixing the application id with `.edge`
+and the version name with `-edge`. The two go together on purpose: a moving version code is what
+lets one edge build update the last, and a version code may never go down, so an edge build sharing
+the release id would make the next release a refused downgrade. Separate ids mean both can sit on
+one device, which is also what you want when the app under test is the home screen.
+
+Everything else about the build is the release build: same minification, same gates, same key. A tag
+sets no such variable, so nothing about a real release changes.
+
+The edge build is a prerelease on purpose. `/releases/latest` — what the README links and what
+Obtainium follows — must keep pointing at the last tagged version.
+
 ## Once, before the first release
 
 - [ ] Run `scripts/setup-release-signing.sh`. It generates the keystore, sets the four repository

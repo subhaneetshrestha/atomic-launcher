@@ -36,7 +36,7 @@ jobs:
             echo "Bump the version literals in the release commit, then tag that commit."
             exit 1
           }
-          echo "$GITHUB_REF_NAME builds versionName $got, versionCode $(sed -n 's/^ *versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)"
+          echo "$GITHUB_REF_NAME builds versionName $got, versionCode $(sed -n 's/^val releaseVersionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)"
 
       # The keystore lives only in the ATOMIC_KEYSTORE_B64 secret; app/build.gradle.kts attaches
       # the signing config only when ATOMIC_KEYSTORE points at a file.

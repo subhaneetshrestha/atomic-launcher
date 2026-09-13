@@ -12,6 +12,17 @@ plugins {
 // unsigned, which is what CI produces on pull requests.
 val releaseKeystore = providers.environmentVariable("ATOMIC_KEYSTORE")
 
+// Set by CI, and only for the rolling `edge` build off main — never by a tag and never by hand.
+// It carries a date-based versionCode so one edge build can update the last, which also means the
+// edge build must be a separate application id: a versionCode may never go down, so an edge build
+// sharing the release id would make the next release a refused downgrade. `.edge` beside `.debug`
+// keeps it installable next to a real one instead.
+val edgeVersionCode = providers.environmentVariable("ATOMIC_EDGE_VERSION_CODE").map { it.toInt() }
+
+// versionCode = MAJOR * 10000 + MINOR * 100 + PATCH. A literal on purpose, like versionName below:
+// the same commit must always build the same release APK, so neither may come from git or the clock.
+val releaseVersionCode = 10000
+
 android {
     namespace = "io.github.subhaneetshrestha.atomic"
     compileSdk = 37
@@ -23,9 +34,7 @@ android {
         applicationId = "io.github.subhaneetshrestha.atomic"
         minSdk = 26
         targetSdk = 36
-        // Literal on purpose: the same commit must always build the same APK, so neither value
-        // may come from git or the clock. versionCode = MAJOR * 10000 + MINOR * 100 + PATCH.
-        versionCode = 10000
+        versionCode = edgeVersionCode.getOrElse(releaseVersionCode)
         versionName = "1.0.0"
     }
 
@@ -55,6 +64,13 @@ android {
             isCrunchPngs = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
+            // An edge build is this same build type — same minification, same gates, same APK the
+            // release path produces — wearing a different name, so that what CI publishes off main
+            // is what CI tested and nothing about a tagged release changes.
+            if (edgeVersionCode.isPresent) {
+                applicationIdSuffix = ".edge"
+                versionNameSuffix = "-edge"
+            }
         }
     }
 

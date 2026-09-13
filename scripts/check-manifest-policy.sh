@@ -39,13 +39,21 @@ fi
 #   EXPAND_STATUS_BAR        normal   opening the shade where the platform still permits it
 #   PACKAGE_USAGE_STATS      special  puts atomic in the Usage Access list; grants nothing itself
 #   DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION  androidx.core defines this one per-app, signature-level
+#
+# That last one is named after the application id, which the edge build off main suffixes with
+# `.edge`, so it is read from the APK rather than written down as one variant's spelling.
+package=$("$aapt2" dump packagename "$apk")
+if [ -z "$package" ]; then
+    echo "FAIL: aapt2 read no package name from $apk." >&2
+    exit 1
+fi
 allowed_permissions="
 android.permission.REQUEST_DELETE_PACKAGES
 android.permission.INTERNET
 android.permission.ACCESS_NETWORK_STATE
 android.permission.EXPAND_STATUS_BAR
 android.permission.PACKAGE_USAGE_STATS
-io.github.subhaneetshrestha.atomic.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+$package.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 "
 
 # Named separately from the allowlist so the failure says which promise was broken, not just
