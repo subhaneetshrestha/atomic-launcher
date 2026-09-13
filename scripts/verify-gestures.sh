@@ -50,7 +50,15 @@ top() {
 }
 # Without -W: on older Android, waiting for a launch whose activity is already resumed can block
 # for a minute at a time.
-home() { sh am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1; wait_s 2; }
+# Swipe down opens the notification shade for real since Phase 8, and an open shade holds the
+# focus and swallows every touch after it — a long press that should open settings does nothing.
+# Closing it belongs here rather than at the one call site, because every step that follows a
+# gesture goes through home().
+home() {
+  sh cmd statusbar collapse >/dev/null 2>&1
+  sh am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1
+  wait_s 2
+}
 crashes() { $ADB logcat -d -b crash 2>/dev/null | tr -d '\r' | grep -c "$PKG" || true; }
 # A swipe the recogniser will see: adb sends intermediate moves over the duration given.
 swipe() { sh input swipe "$1" "$2" "$3" "$4" "${5:-250}" >/dev/null; wait_s 3; }
@@ -108,7 +116,15 @@ for surface in "Swipe up" "Swipe down" "Swipe left" "Swipe right" "Long swipe up
   scroll_to "$surface" || ko "the list shows '$surface'"
 done
 ok "the gesture list shows the surfaces"
-scroll_top; ui=$(dump); grep -qi 'later version of atomic' <<<"$ui" && ok "an action from a later version says so" || ko "an action from a later version says so"
+# Phase 3 left the six accessibility actions and three launcher surfaces saying they would arrive
+# later; Phase 8 built every one of them, so nothing on this screen may still say so. What an
+# action needs now is a permission or a newer Android, and the picker below says which.
+scroll_top; ui=$(dump)
+if grep -qi 'later version of atomic' <<<"$ui"; then
+  ko "no surface is still waiting for a later version ($(grep -oi 'text="[^"]*later version[^"]*"' <<<"$ui" | head -1))"
+else
+  ok "no surface is still waiting for a later version"
+fi
 grep -qi 'Camera' <<<"$ui" && ok "the list shows what each gesture does" || ko "the list shows what each gesture does"
 
 # 5. Rebinding a gesture through the picker.

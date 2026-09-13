@@ -74,7 +74,13 @@ SPOT
 }
 open_settings() { home; hold_at $(empty_spot); }
 open_theme_settings() { open_settings; scroll_to_tap "Theme"; }
-top() { sh dumpsys activity activities | grep -m1 -oE 'topResumedActivity=ActivityRecord\{[^}]*\}' | sed -E 's/.* u0 ([^ }]+).*/\1/'; }
+# topResumedActivity arrived in API 29; below it the same thing is called mResumedActivity.
+top() {
+  local a
+  a=$(sh dumpsys activity activities | grep -m1 -oE 'topResumedActivity=ActivityRecord\{[^}]*\}')
+  [ -z "$a" ] && a=$(sh dumpsys activity activities | grep -m1 -oE 'mResumedActivity: ActivityRecord\{[^}]*\}')
+  sed -E 's/.* u0 ([^ }]+).*/\1/' <<<"$a"
+}
 
 # The screen as "min median max" brightness over a band of rows, and the colour at its middle.
 shot() { $ADB exec-out screencap > "$TMP/shot.raw" 2>/dev/null; }

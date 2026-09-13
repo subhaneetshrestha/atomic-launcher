@@ -204,6 +204,10 @@ fi
 # 7. Locking the screen: by the service from Android 9, by the administrator below it.
 $ADB logcat -c >/dev/null 2>&1
 edit_document "double_tap=lock_screen" || ko "binding the lock to double tap"
+# edit_document force-stops the app to make it read the new document, and a force-stop unbinds
+# the accessibility service without rebinding it. Above Android 9 the lock goes through that
+# service, so it has to be switched on again or what is tested is an unbound service.
+enable_service
 grep -q '"lock_screen"' <<<"$(settings_json)" && ok "the lock is bound to double tap" ||
   ko "the lock is bound to double tap"
 if [ "$api" -lt 28 ]; then
