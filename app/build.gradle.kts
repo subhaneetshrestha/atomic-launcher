@@ -8,7 +8,8 @@ plugins {
 }
 
 // Release signing is attached only when a keystore is supplied through the environment
-// (CI secrets or a maintainer's shell). Local and F-Droid builds produce unsigned APKs.
+// (the release workflow's secrets, or a maintainer's shell). Without it the release APK is
+// unsigned, which is what CI produces on pull requests.
 val releaseKeystore = providers.environmentVariable("ATOMIC_KEYSTORE")
 
 android {
@@ -22,9 +23,10 @@ android {
         applicationId = "io.github.subhaneetshrestha.atomic"
         minSdk = 26
         targetSdk = 36
-        // Literal on purpose: reproducible builds must not depend on git or the clock.
-        versionCode = 1
-        versionName = "0.1.0"
+        // Literal on purpose: the same commit must always build the same APK, so neither value
+        // may come from git or the clock. versionCode = MAJOR * 10000 + MINOR * 100 + PATCH.
+        versionCode = 10000
+        versionName = "1.0.0"
     }
 
     signingConfigs {
@@ -68,7 +70,8 @@ android {
     }
 
     dependenciesInfo {
-        // The Google-encrypted dependency block is not reproducible and is rejected by F-Droid.
+        // The Google-encrypted dependency block is not reproducible, and nothing reads it on the
+        // one channel atomic publishes to (ADR 0004). Left off: it costs nothing to keep out.
         includeInApk = false
         includeInBundle = false
     }
