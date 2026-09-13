@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   release:
-    name: Signed APK to GitHub Release, AAB as artifact
+    name: Signed APK to GitHub Release
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -24,6 +24,19 @@ jobs:
         with:
           validate-wrappers: true
           cache-read-only: true
+
+      # A tag names a version; the APK carries one. If they disagree the release is a lie, and
+      # versionCode can never be walked back, so check before spending twenty minutes building.
+      - name: Tag matches the version in the build
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          got=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+          test "$want" = "$got" || {
+            echo "Tag $GITHUB_REF_NAME says $want, app/build.gradle.kts says $got."
+            echo "Bump the version literals in the release commit, then tag that commit."
+            exit 1
+          }
+          echo "$GITHUB_REF_NAME builds versionName $got, versionCode $(sed -n 's/^ *versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)"
 
       # The keystore lives only in the ATOMIC_KEYSTORE_B64 secret; app/build.gradle.kts attaches
       # the signing config only when ATOMIC_KEYSTORE points at a file.
@@ -40,7 +53,22 @@ jobs:
           ATOMIC_KEYSTORE_PASSWORD: ${{ secrets.ATOMIC_KEYSTORE_PASSWORD }}
           ATOMIC_KEY_ALIAS: ${{ secrets.ATOMIC_KEY_ALIAS }}
           ATOMIC_KEY_PASSWORD: ${{ secrets.ATOMIC_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon --stacktrace ktlintCheck test assembleRelease bundleRelease checkReleaseApkSize gmsGuard
+        run: ./gradlew --no-daemon --stacktrace ktlintCheck test lintRelease assembleRelease checkReleaseApkSize gmsGuard
+
+      # The same gate CI runs, against the signed APK that is about to be published.
+      - name: Manifest and DEX policy gate
+        run: scripts/check-manifest-policy.sh
+
+      # Gradle attaches the signing config only when ATOMIC_KEYSTORE reaches it. If that ever
+      # fails quietly the build still succeeds and produces app-release-unsigned.apk, which the
+      # next step would happily rename and publish — and an unsigned APK installs nowhere. The
+      # printed fingerprint is the one to compare against docs/release/signing.md section 1.
+      - name: The APK is signed
+        run: |
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          apk=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          case "$apk" in *unsigned*) echo "Built $apk — the signing config was not attached."; exit 1 ;; esac
+          "$apksigner" verify --print-certs "$apk"
 
       - name: Name and checksum the APK
         run: |
@@ -50,18 +78,32 @@ jobs:
           mv "$apk" "atomic-launcher-${GITHUB_REF_NAME}.apk"
           sha256sum "atomic-launcher-${GITHUB_REF_NAME}.apk" > SHA256SUMS
 
+      # Create then upload, rather than create-with-files, so that re-running this job after a
+      # half-finished publish works: a tag cannot be reused, so the job has to be repeatable.
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          set -eu
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+          gh release upload "$GITHUB_REF_NAME" \
             app/build/outputs/apk/release/atomic-launcher-*.apk \
             app/build/outputs/apk/release/SHA256SUMS \
             app/build/outputs/mapping/release/mapping.txt \
-            --title "$GITHUB_REF_NAME" --generate-notes
+            --clobber
+          echo "Published assets:"
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name'
 
+      # The release is the point, but if gh fails after a good build the APK must not vanish with
+      # the runner: a tag cannot be reused, so the artifact is the way back without re-tagging.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
-          name: play-bundle
-          retention-days: 30
-          path: app/build/outputs/bundle/release/*.aab
+          name: release-apk
+          retention-days: 90
+          if-no-files-found: warn
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/release/SHA256SUMS
+            app/build/outputs/mapping/release/mapping.txt
