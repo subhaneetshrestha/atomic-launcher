@@ -51,16 +51,19 @@ opened by a file manager, a link opened by a browser, and a document handed over
 
 29 of 29 on both levels.
 
-Phase 1 to 6 harnesses re-run on the same build:
+Phase 1 to 6 harnesses re-run on the same build. These were left pending here and filled in on
+2026-09-13, when Phase 8 ran all eight harnesses together against one build; the numbers below are
+that run's, and the themes column above was confirmed on API 26 at the same time. See
+`2026-09-13-phase-8-acceptance.md`, which also records the three harness defects that sweep found.
 
 | Harness | API 26 | API 36 |
 |---|---|---|
-| `verify-home.sh` (Phase 1) | PENDING26 | PENDING36 |
-| `verify-settings.sh` (Phase 2) | PENDING26 | PENDING36 |
-| `verify-gestures.sh` (Phase 3) | PENDING26 | PENDING36 |
-| `verify-search.sh` (Phase 4) | PENDING26 | PENDING36 |
-| `verify-badges.sh` (Phase 5) | PENDING26 | PENDING36 |
-| `verify-background.sh` (Phase 6) | PENDING26 | PENDING36 |
+| `verify-home.sh` (Phase 1) | 18/18 | 18/18 |
+| `verify-settings.sh` (Phase 2) | 29/29 | 29/29 |
+| `verify-gestures.sh` (Phase 3) | 24/24 | 24/24 |
+| `verify-search.sh` (Phase 4) | 19/19 | 19/19 |
+| `verify-badges.sh` (Phase 5) | 49/49 | 52/52 |
+| `verify-background.sh` (Phase 6) | 25/25 | 25/25 |
 
 ## What the emulators could not answer
 
