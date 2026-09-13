@@ -18,6 +18,19 @@ class SourceDetectorTest {
     }
 
     @Test
+    fun `a text-plain claim does not hide JSON or a feed underneath it`() {
+        // Piwigo answers its own JSON API as text/plain; trusting the label as the other declared
+        // types are trusted would read every one of its collections as a single garbled address.
+        val json = "{\"result\":[]}".toByteArray()
+        assertEquals(SourceKind.JSON, SourceDetector.detect("text/plain", json))
+        val feed = "<rss></rss>".toByteArray()
+        assertEquals(SourceKind.FEED, SourceDetector.detect("text/plain; charset=utf-8", feed))
+        // A body that really is one address per line still reads as TEXT, the declared type.
+        val plain = "https://example.org/a.jpg".toByteArray()
+        assertEquals(SourceKind.TEXT, SourceDetector.detect("text/plain", plain))
+    }
+
+    @Test
     fun `an unhelpful content type falls through to the bytes`() {
         assertEquals(
             SourceKind.IMAGE,

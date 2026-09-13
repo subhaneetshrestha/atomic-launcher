@@ -239,4 +239,29 @@ class ImageFetcherTest {
         assertTrue(plain.permanent)
         assertTrue(plain.reason.contains("https"), plain.reason)
     }
+
+    @Test
+    fun `a rate limit is honoured, then retried, then succeeds`() {
+        var attempts = 0
+        serve("/limited.txt") { exchange ->
+            attempts++
+            if (attempts <= 2) {
+                exchange.responseHeaders.add("Retry-After", "0")
+                exchange.send(429, ByteArray(0))
+            } else {
+                exchange.send(200, "https://example.org/a.jpg".toByteArray(), "text/plain")
+            }
+        }
+        val outcome = assertIs<ImageFetcher.Outcome.Index>(fetcher.fetchIndex(url("/limited.txt")))
+        assertEquals("https://example.org/a.jpg", outcome.body)
+        assertEquals(3, attempts, "two 429s, then the answer that mattered")
+    }
+
+    @Test
+    fun `a rate limit that never lifts is reported rather than retried forever`() {
+        serve("/stuck.txt") { it.send(429, ByteArray(0)) }
+        val outcome = assertIs<ImageFetcher.Outcome.Failed>(fetcher.fetchIndex(url("/stuck.txt")))
+        assertFalse(outcome.permanent, "the server may stop rate limiting; the address is not the problem")
+        assertTrue(outcome.reason.contains("rate limiting"), outcome.reason)
+    }
 }

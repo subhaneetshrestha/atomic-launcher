@@ -57,6 +57,48 @@ class CollectionParserTest {
     }
 
     @Test
+    fun `a wallpaper's thumbnails never join its own full-size image`() {
+        // The bug this pins: thumbs.small, .large and .original are all image-extension URLs too,
+        // so a walk that does not know it is inside a thumbnail container collects all four per
+        // wallpaper — three of every four "images" a Wallhaven rotation picked were 300px thumbs.
+        val parsed =
+            parse(
+                SourceKind.JSON,
+                """
+                {"data":[
+                  {"id":"abc","path":"https://w.wallhaven.cc/full/ab/wallhaven-abc.jpg",
+                   "thumbs":{"small":"https://th.wallhaven.cc/small/ab/abc.jpg",
+                             "large":"https://th.wallhaven.cc/large/ab/abc.jpg",
+                             "original":"https://th.wallhaven.cc/original/ab/abc.jpg"}},
+                  {"id":"def","path":"https://w.wallhaven.cc/full/de/wallhaven-def.png",
+                   "thumbs":{"small":"https://th.wallhaven.cc/small/de/def.jpg"}}
+                ],"meta":{"current_page":1}}
+                """.trimIndent(),
+            )
+        assertEquals(
+            listOf(
+                "https://w.wallhaven.cc/full/ab/wallhaven-abc.jpg",
+                "https://w.wallhaven.cc/full/de/wallhaven-def.png",
+            ),
+            parsed.urls,
+        )
+    }
+
+    @Test
+    fun `a source with only thumbnails falls back to them rather than finding nothing`() {
+        val parsed =
+            parse(
+                SourceKind.JSON,
+                """{"thumbs":{"small":"https://example.org/only-thumb.jpg"}}""",
+            )
+        assertEquals(listOf("https://example.org/only-thumb.jpg"), parsed.urls)
+        assertEquals(
+            listOf("no full-size image found; used a thumbnail or the url, path and src fields instead"),
+            parsed.warnings,
+        )
+    }
+
+    @Test
     fun `addresses with no extension are taken from the fields that name addresses`() {
         val parsed =
             parse(
@@ -64,7 +106,7 @@ class CollectionParserTest {
                 """[{"url":"https://images.example.org/photo-1?w=1080","title":"one"}]""",
             )
         assertEquals(listOf("https://images.example.org/photo-1?w=1080"), parsed.urls)
-        assertTrue(parsed.warnings.single().contains("image extension"))
+        assertTrue(parsed.warnings.single().contains("no full-size image found"))
     }
 
     @Test

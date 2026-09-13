@@ -34,12 +34,16 @@ object SourceDetector {
         contentType: String?,
         head: ByteArray,
     ): SourceKind {
-        byContentType(contentType)?.let { return it }
+        // Every declared type is trusted immediately except text/plain: some hand-rolled JSON APIs
+        // (Piwigo among them) mislabel their answer that way, and the one document a mislabel can
+        // hide behind text/plain is exactly the one the bytes themselves give away for free.
+        val declared = byContentType(contentType)
+        if (declared != null && declared != SourceKind.TEXT) return declared
         if (isImageMagic(head)) return SourceKind.IMAGE
         return when (head.firstPrintable()) {
             '{', '[' -> SourceKind.JSON
             '<' -> SourceKind.FEED
-            else -> SourceKind.TEXT
+            else -> declared ?: SourceKind.TEXT
         }
     }
 

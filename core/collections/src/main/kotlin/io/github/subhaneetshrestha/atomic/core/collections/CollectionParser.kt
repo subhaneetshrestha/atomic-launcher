@@ -36,6 +36,16 @@ object CollectionParser {
     /** Keys whose string values are addresses, used only when nothing in the document looks like an image. */
     private val ADDRESS_KEYS = setOf("url", "path", "src", "image", "img", "href", "link", "thumb", "thumbnail")
 
+    /**
+     * A key whose whole subtree is thumbnails, never the collection's real images. Wallhaven's
+     * per-wallpaper object carries both `path` (full size) and `thumbs.{small,large,original}`
+     * (all of them `.jpg` URLs too), so without this every thumbnail was collected alongside the
+     * full image it belongs to — three of every four wallpapers a Wallhaven rotation picked were
+     * 300px thumbs, and nothing pinned it because [looksLikeImage][UrlRules.looksLikeImage] does
+     * not look at the key it was found under.
+     */
+    private val THUMBNAIL_CONTAINERS = setOf("thumbs", "thumbnails", "previews")
+
     private const val MAX_DEPTH = 8
 
     private val lenient = Json { ignoreUnknownKeys = true }
@@ -89,7 +99,7 @@ object CollectionParser {
         if (addresses.isEmpty()) return ParsedCollection(emptyList(), listOf("no image addresses in the JSON"))
         return ParsedCollection(
             UrlRules.clean(addresses),
-            listOf("no address ended in an image extension; used the url, path and src fields instead"),
+            listOf("no full-size image found; used a thumbnail or the url, path and src fields instead"),
         )
     }
 
@@ -100,16 +110,26 @@ object CollectionParser {
         depth: Int,
         images: MutableList<String>,
         addresses: MutableList<String>,
+        insideThumbnails: Boolean = false,
     ) {
         if (depth > MAX_DEPTH) return
         when (element) {
             is JsonArray -> {
-                element.forEach { walk(it, baseUrl, key, depth + 1, images, addresses) }
+                element.forEach { walk(it, baseUrl, key, depth + 1, images, addresses, insideThumbnails) }
             }
 
             is JsonObject -> {
                 element.forEach { (name, value) ->
-                    walk(value, baseUrl, name.lowercase(), depth + 1, images, addresses)
+                    val lowered = name.lowercase()
+                    walk(
+                        value,
+                        baseUrl,
+                        lowered,
+                        depth + 1,
+                        images,
+                        addresses,
+                        insideThumbnails || lowered in THUMBNAIL_CONTAINERS,
+                    )
                 }
             }
 
@@ -117,7 +137,12 @@ object CollectionParser {
                 if (!element.isString) return
                 val resolved = UrlRules.resolve(baseUrl, element.content) ?: return
                 when {
+                    // A thumbnail is never the collection's real image, however it looks: it is
+                    // kept only as a last-resort address, the way a URL with no extension at all is.
+                    insideThumbnails -> addresses += resolved
+
                     UrlRules.looksLikeImage(resolved) -> images += resolved
+
                     key in ADDRESS_KEYS -> addresses += resolved
                 }
             }

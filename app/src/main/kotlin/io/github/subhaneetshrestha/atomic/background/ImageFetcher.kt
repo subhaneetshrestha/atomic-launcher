@@ -55,7 +55,8 @@ class ImageFetcher(
         ) : Outcome()
     }
 
-    private var lastWallhavenRequest = 0L
+    /** When each rationed host was last asked, so a second API source never shares one clock with Wallhaven's. */
+    private val lastRequestAt = HashMap<String, Long>()
 
     fun fetchIndex(
         url: String,
@@ -65,6 +66,7 @@ class ImageFetcher(
     ): Outcome {
         val opened =
             open(url) { connection ->
+                connection.setRequestProperty("Accept", "application/json,*/*;q=0.8")
                 etag?.let { connection.setRequestProperty("If-None-Match", it) }
                 lastModified?.let { connection.setRequestProperty("If-Modified-Since", it) }
             }
@@ -157,11 +159,12 @@ class ImageFetcher(
         prepare: (HttpURLConnection) -> Unit,
     ): Opened {
         var current = url
+        var rateLimitRetries = 0
         for (hop in 0..MAX_REDIRECTS) {
             UrlRules.problemWith(current)?.let {
                 return Opened.Failed(Outcome.Failed("the address $it", permanent = true))
             }
-            spaceOutWallhaven(current)
+            spaceOut(current)
             val connection =
                 try {
                     (URL(current).openConnection() as HttpURLConnection).apply {
@@ -201,6 +204,17 @@ class ImageFetcher(
                             )
                 }
 
+                code == HTTP_TOO_MANY_REQUESTS -> {
+                    val wait = retryAfterMillis(connection.getHeaderField("Retry-After"))
+                    connection.disconnect()
+                    if (rateLimitRetries >= MAX_RATE_LIMIT_RETRIES) {
+                        return Opened.Failed(Outcome.Failed("the server is rate limiting requests", permanent = false))
+                    }
+                    rateLimitRetries++
+                    sleep(wait)
+                    // `current` is unchanged: the next iteration asks the same address again.
+                }
+
                 else -> {
                     connection.disconnect()
                     return Opened.Failed(
@@ -212,12 +226,28 @@ class ImageFetcher(
         return Opened.Failed(Outcome.Failed("redirected more than $MAX_REDIRECTS times", permanent = true))
     }
 
-    /** Keyless Wallhaven requests are rationed; the launcher stays well inside what it is allowed. */
-    private fun spaceOutWallhaven(url: String) {
-        if (UrlRules.hostOf(url)?.endsWith(Wallhaven.HOST) != true) return
-        val since = System.currentTimeMillis() - lastWallhavenRequest
-        if (since in 0 until Wallhaven.MIN_SPACING_MS) sleep(Wallhaven.MIN_SPACING_MS - since)
-        lastWallhavenRequest = System.currentTimeMillis()
+    /**
+     * A keyless request budget is rationed by host, and only the exact API host it was measured
+     * against — `endsWith` also caught `w.wallhaven.cc` and `th.wallhaven.cc`, so every image
+     * download was sleeping 1.4s for a limit that only ever applied to the search API and sends no
+     * rate-limit headers of its own.
+     */
+    private fun spaceOut(url: String) {
+        val host = UrlRules.hostOf(url)?.lowercase() ?: return
+        val minSpacing = SPACED_HOSTS[host] ?: return
+        val since = System.currentTimeMillis() - (lastRequestAt[host] ?: 0L)
+        if (since in 0 until minSpacing) sleep(minSpacing - since)
+        lastRequestAt[host] = System.currentTimeMillis()
+    }
+
+    /**
+     * `Retry-After` in seconds, the only form a keyless API here has been seen to send. Wikimedia's
+     * own policy is explicit that an absent header still means a wait: "if no such header is
+     * present, clients should wait at least five seconds."
+     */
+    private fun retryAfterMillis(header: String?): Long {
+        val seconds = header?.trim()?.toLongOrNull()
+        return if (seconds != null && seconds > 0) seconds * 1000 else RATE_LIMIT_FALLBACK_MS
     }
 
     /** The whole body, or null when it is longer than [limit]. */
@@ -286,15 +316,30 @@ class ImageFetcher(
 
         private const val HTTP_NOT_MODIFIED = 304
 
+        private const val HTTP_TOO_MANY_REQUESTS = 429
+
+        /** A 429 is retried this many times before it is reported like any other failure. */
+        private const val MAX_RATE_LIMIT_RETRIES = 2
+
+        private const val RATE_LIMIT_FALLBACK_MS = 5_000L
+
         private val REDIRECTS = setOf(301, 302, 303, 307, 308)
 
         /** Answers that say the address is wrong, rather than that the server is having a bad day. */
         private val PERMANENT_CODES = setOf(400, 401, 403, 404, 405, 410, 414, 451)
 
+        /** Hosts with a keyless rate limit worth respecting, and the gap the launcher holds to it. */
+        private val SPACED_HOSTS = mapOf(Wallhaven.HOST to Wallhaven.MIN_SPACING_MS)
+
         private const val TAG = "ImageFetcher"
     }
 }
 
-/** What the launcher calls itself to a server it fetches from. */
+/**
+ * What the launcher calls itself to a server it fetches from. The repository URL is the contact
+ * information Wikimedia's user-agent policy asks for, and the documented line between its 10/min
+ * and 200/min anonymous bands.
+ */
 fun launcherUserAgent(context: android.content.Context): String =
-    "atomic-launcher/${context.packageName} (Android ${android.os.Build.VERSION.RELEASE})"
+    "atomic-launcher/${context.packageName} (Android ${android.os.Build.VERSION.RELEASE}; " +
+        "+https://github.com/subhaneetshrestha/atomic-launcher)"
