@@ -18,6 +18,14 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <!--
+        Handing a downloaded update to the system installer. Declaring this is what lets atomic be
+        an install source at all; Android still shows its own "allow atomic to install apps"
+        prompt the first time, and its own confirmation dialog on every install after that. Nothing
+        is downloaded until the person taps "Check for updates" or turns on the periodic check.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
         Fetching a background from a collection the user configured. Both are normal permissions,
         nothing is uploaded, and no request is made at all until a collection address is entered.
     -->
@@ -220,6 +228,15 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!--
+            Where PackageInstaller reports how an update install went. Reached only by the
+            PendingIntent UpdateInstaller itself creates; not exported, so nothing else can send it
+            this.
+        -->
+        <receiver
+            android:name=".update.UpdateInstallReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

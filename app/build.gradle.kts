@@ -5,6 +5,10 @@ import org.gradle.api.artifacts.result.ResolvedDependencyResult
 
 plugins {
     alias(libs.plugins.android.application)
+    // Only the update package's GitHubRelease/GitHubAsset need @Serializable codegen in this
+    // module; core:theme and core:collections already carry the runtime dependency and the plugin
+    // both, and this is the same pairing applied here for the same reason.
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // Release signing is attached only when a keystore is supplied through the environment

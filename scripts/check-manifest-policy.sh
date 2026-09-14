@@ -34,6 +34,7 @@ fi
 # The permissions atomic declares, and the reason each one is defensible. Anything outside this list
 # fails the gate: adding a permission is a decision, not a merge artifact.
 #   REQUEST_DELETE_PACKAGES  normal   uninstall through the system dialog
+#   REQUEST_INSTALL_PACKAGES normal   handing a downloaded update to the system installer (ADR 0005)
 #   INTERNET                 normal   fetching a background from a collection the user configured
 #   ACCESS_NETWORK_STATE     normal   whether that fetch is allowed to run now
 #   EXPAND_STATUS_BAR        normal   opening the shade where the platform still permits it
@@ -49,6 +50,7 @@ if [ -z "$package" ]; then
 fi
 allowed_permissions="
 android.permission.REQUEST_DELETE_PACKAGES
+android.permission.REQUEST_INSTALL_PACKAGES
 android.permission.INTERNET
 android.permission.ACCESS_NETWORK_STATE
 android.permission.EXPAND_STATUS_BAR

@@ -31,7 +31,7 @@ published yet; the first will appear under [Releases](https://github.com/subhane
 - Lightweight: release APK budget 2.5 MiB, no third-party UI or DI libraries, platform APIs only.
 - Crash-free: a crashing home app silently loses its default status, so every system call is guarded.
 - Honest about permissions: every privileged feature (notification access, accessibility, usage access) is off by default and explained before the system grant screen.
-- GMS-free: one APK, published on GitHub Releases and built by GitHub Actions ([ADR 0004](docs/decisions/0004-github-only-distribution.md)). Installs update through [Obtainium](https://github.com/ImranR98/Obtainium), which watches releases; the app never updates itself.
+- GMS-free: one APK, published on GitHub Releases and built by GitHub Actions ([ADR 0004](docs/decisions/0004-github-only-distribution.md)). Installs update through [Obtainium](https://github.com/ImranR98/Obtainium), which watches releases, or the app's own "Check for updates" ([ADR 0005](docs/decisions/0005-the-app-may-look-for-its-own-updates.md)) — nothing checks on its own until one of those is asked to.
 
 ## Install
 
@@ -55,7 +55,9 @@ screen you rely on. Its version code moves with every build, so one edge build u
 Obtainium will follow it if you turn prereleases on.
 
 To get updates, point [Obtainium](https://github.com/ImranR98/Obtainium) at this repository; it
-watches releases and installs them. atomic never updates itself and never checks for updates.
+watches releases and installs them. Or open atomic's own Settings → About → "Check for updates",
+which asks GitHub once, only when tapped — nothing runs on a schedule. Either way, Android's own
+install confirmation is the last step; nothing here installs anything without it.
 
 ## Build
 

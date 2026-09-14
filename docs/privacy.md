@@ -1,24 +1,27 @@
 # Privacy
 
 atomic has no account, no analytics, no advertising identifier, no crash-reporting service and no
-telemetry of any kind. It makes no network request of its own. Everything below is checkable from
-outside the app — the last section says how.
+telemetry of any kind. It makes no network request of its own, unless you ask it to look for an
+update. Everything below is checkable from outside the app — the last section says how.
 
 ## What leaves the device
 
-Nothing, unless you ask for it, and then only to a host you typed yourself:
+Nothing, unless you ask for it:
 
 | When | Where to | What is sent |
 |---|---|---|
 | You set a background collection address, or pick a named source in Settings → Background → Source | that address, and the image URLs it lists — a named source only ever resolves to an address, the same as one you type | an HTTPS GET, `User-Agent: atomic-launcher/io.github.subhaneetshrestha.atomic (Android <release>; +https://github.com/subhaneetshrestha/atomic-launcher)`, plus `If-None-Match`/`If-Modified-Since` from the previous fetch |
 | You open an `atomic://theme?url=…` link and confirm it | that address | the same GET |
+| You tap "Check for updates" in About | `api.github.com`, the one host this is not something you typed — a fixed address naming this repository | one HTTPS GET for the release, and, only if you then choose to update, one more for the APK and the checksums beside it ([ADR 0005](decisions/0005-the-app-may-look-for-its-own-updates.md)) |
 | You send a crash report from About | your mail app, addressed to the maintainer | the report text, which you can read and edit first |
 
 Every hop must be `https`; a redirect to plain `http` is refused, as is any address that is not
-HTTPS. No request carries a device identifier, a model name, an install id or anything about which
-apps you have. Wallhaven collections use its keyless public API, so no account and no token.
+HTTPS. No request carries a device identifier, a model name, an install id, an account or a token
+— the update check is a plain, anonymous GET, same as every other row here — or anything about
+which apps you have. Wallhaven collections use its keyless public API, so no account and no token.
 
-If you never configure a collection and never open a theme link, atomic never opens a socket.
+If you never configure a collection, never open a theme link and never tap "Check for updates",
+atomic never opens a socket.
 
 ## What the app reads, and why
 
@@ -75,11 +78,13 @@ this stops being true:
 ```sh
 scripts/check-manifest-policy.sh            # permissions allowlist, no QUERY_ALL_PACKAGES, no GMS in the DEX
 ./gradlew gmsGuard                          # no Google Play services on the release classpath
-aapt2 dump permissions atomic-launcher.apk  # the five permissions, and nothing else
+aapt2 dump permissions atomic-launcher.apk  # the six permissions, and nothing else
 ```
 
-The five declared permissions are `REQUEST_DELETE_PACKAGES` (the uninstall dialog), `INTERNET` and
-`ACCESS_NETWORK_STATE` (background collections), `EXPAND_STATUS_BAR` (opening the shade) and
+The six declared permissions are `REQUEST_DELETE_PACKAGES` (the uninstall dialog),
+`REQUEST_INSTALL_PACKAGES` (handing a downloaded update to the system installer, and nothing until
+you tap "Check for updates" and then choose to install one), `INTERNET` and `ACCESS_NETWORK_STATE`
+(background collections and the update check), `EXPAND_STATUS_BAR` (opening the shade) and
 `PACKAGE_USAGE_STATS` (which only puts atomic in Android's Usage Access list; it grants nothing on
 its own). Notification access, accessibility and device administration are not permissions at all —
 they are switches in Android's own settings, and you can see and revoke them there.

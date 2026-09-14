@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.util.TypedValue
@@ -34,7 +35,9 @@ import io.github.subhaneetshrestha.atomic.apps.AppKey
 import io.github.subhaneetshrestha.atomic.background.BackgroundController
 import io.github.subhaneetshrestha.atomic.background.BackgroundEngine
 import io.github.subhaneetshrestha.atomic.background.BackgroundStatus
+import io.github.subhaneetshrestha.atomic.background.ImageFetcher
 import io.github.subhaneetshrestha.atomic.background.SkipReason
+import io.github.subhaneetshrestha.atomic.background.launcherUserAgent
 import io.github.subhaneetshrestha.atomic.core.collections.SourceInput
 import io.github.subhaneetshrestha.atomic.core.collections.UrlRules
 import io.github.subhaneetshrestha.atomic.core.collections.WallpaperSource
@@ -81,6 +84,8 @@ import io.github.subhaneetshrestha.atomic.share.ImportActivity
 import io.github.subhaneetshrestha.atomic.share.ThemeFiles
 import io.github.subhaneetshrestha.atomic.system.DeviceAdminLock
 import io.github.subhaneetshrestha.atomic.ui.Motion
+import io.github.subhaneetshrestha.atomic.update.UpdateChecker
+import io.github.subhaneetshrestha.atomic.update.UpdateInstaller
 import io.github.subhaneetshrestha.atomic.util.Logs
 import io.github.subhaneetshrestha.atomic.util.Threads
 import io.github.subhaneetshrestha.atomic.util.readAtMost
@@ -1863,46 +1868,144 @@ class SettingsActivity : ThemedActivity() {
 
     private inner class AboutScreen : Screen(ScreenId.ABOUT, R.string.settings_about) {
         private lateinit var adapter: RowAdapter
+        private val rows = mutableListOf<Row>()
+        private val taps = mutableListOf<() -> Unit>()
+        private var checking = false
 
         override fun createView(): View {
             adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
             refresh()
-            return list(adapter, onClick = { position ->
-                when (position) {
-                    1 -> {
-                        open(Uri.parse(getString(R.string.source_url)))
-                    }
-
-                    3 -> {
-                        shareCrash()
-                    }
-
-                    4 -> {
-                        atomicApp.crashRecorder.clear()
-                        refresh()
-                    }
-                }
-            })
+            return list(adapter, onClick = { position -> taps.getOrNull(position)?.invoke() })
         }
 
         override fun refresh() {
+            rows.clear()
+            taps.clear()
             val env = atomicApp.crashEnvironment
             val hasCrash = atomicApp.crashRecorder.lastReport() != null
-            adapter.rows =
-                listOf(
-                    Row(
-                        getString(R.string.about_version, env.appVersion, env.versionCode),
-                        "Android ${env.androidRelease} (API ${env.sdkInt})",
-                    ),
-                    Row(getString(R.string.about_source), getString(R.string.source_url)),
-                    Row(getString(R.string.about_license), getString(R.string.about_typeface)),
-                    Row(
-                        getString(R.string.about_crash_share),
-                        getString(if (hasCrash) R.string.about_crash_recorded else R.string.about_crash_none),
-                    ),
-                    Row(getString(R.string.about_crash_clear)),
-                )
+            add(
+                Row(
+                    getString(R.string.about_version, env.appVersion, env.versionCode),
+                    "Android ${env.androidRelease} (API ${env.sdkInt})",
+                ),
+            )
+            add(Row(getString(R.string.about_source), getString(R.string.source_url))) {
+                open(Uri.parse(getString(R.string.source_url)))
+            }
+            add(Row(getString(R.string.about_license), getString(R.string.about_typeface)))
+            add(
+                Row(
+                    getString(R.string.about_check_updates),
+                    if (checking) getString(R.string.about_update_checking) else null,
+                    enabled = !checking,
+                ),
+            ) { checkForUpdates() }
+            add(
+                Row(
+                    getString(R.string.about_crash_share),
+                    getString(if (hasCrash) R.string.about_crash_recorded else R.string.about_crash_none),
+                ),
+            ) { shareCrash() }
+            add(Row(getString(R.string.about_crash_clear))) {
+                atomicApp.crashRecorder.clear()
+                refresh()
+            }
+            adapter.rows = rows.toList()
             adapter.notifyDataSetChanged()
+        }
+
+        /**
+         * One GET, asked only because this row was tapped — nothing here runs on a schedule.
+         * ADR 0005: told, then it is two taps, because Android will not install anything without
+         * showing its own confirmation regardless of what this app does.
+         */
+        private fun checkForUpdates() {
+            if (checking) return
+            checking = true
+            refresh()
+            val packageName = packageName
+            val edge = packageName.endsWith(".edge")
+            val info = packageInfo()
+            val versionCode =
+                androidx.core.content.pm.PackageInfoCompat
+                    .getLongVersionCode(info)
+            val installedAt = info.lastUpdateTime
+            val fetcher = ImageFetcher(launcherUserAgent(this@SettingsActivity))
+            Threads.io.post {
+                val outcome = UpdateChecker(fetcher).check(edge, versionCode, installedAt)
+                Threads.main.post {
+                    checking = false
+                    refresh()
+                    onCheckResult(outcome, fetcher)
+                }
+            }
+        }
+
+        private fun onCheckResult(
+            outcome: UpdateChecker.Outcome,
+            fetcher: ImageFetcher,
+        ) {
+            when (outcome) {
+                is UpdateChecker.Outcome.UpToDate -> toast(getString(R.string.about_update_none))
+                is UpdateChecker.Outcome.Failed -> toast(getString(R.string.about_update_failed, outcome.reason))
+                is UpdateChecker.Outcome.Available -> offerUpdate(outcome, fetcher)
+            }
+        }
+
+        private fun offerUpdate(
+            available: UpdateChecker.Outcome.Available,
+            fetcher: ImageFetcher,
+        ) {
+            AlertDialog
+                .Builder(this@SettingsActivity)
+                .setTitle(R.string.about_check_updates)
+                .setMessage(getString(R.string.about_update_available, available.label))
+                .setPositiveButton(R.string.about_update_action) { _, _ -> installUpdate(available, fetcher) }
+                .setNegativeButton(R.string.about_update_not_now, null)
+                .show()
+        }
+
+        private fun installUpdate(
+            available: UpdateChecker.Outcome.Available,
+            fetcher: ImageFetcher,
+        ) {
+            toast(getString(R.string.about_update_downloading))
+            Threads.io.post {
+                val result =
+                    UpdateInstaller(this@SettingsActivity)
+                        .install(fetcher, available.apkUrl, available.apkName, available.checksumsUrl)
+                Threads.main.post {
+                    when (result) {
+                        is UpdateInstaller.Result.Started -> {
+                            toast(getString(R.string.about_update_install_started))
+                        }
+
+                        is UpdateInstaller.Result.Failed -> {
+                            toast(getString(R.string.about_update_download_failed, result.reason))
+                        }
+                    }
+                }
+            }
+        }
+
+        private fun packageInfo(): android.content.pm.PackageInfo =
+            if (Build.VERSION.SDK_INT >= 33) {
+                packageManager.getPackageInfo(
+                    packageName,
+                    android.content.pm.PackageManager.PackageInfoFlags
+                        .of(0),
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageInfo(packageName, 0)
+            }
+
+        private fun add(
+            row: Row,
+            tap: () -> Unit = {},
+        ) {
+            rows += row
+            taps += tap
         }
 
         private fun shareCrash() {

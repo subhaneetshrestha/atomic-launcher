@@ -48,6 +48,16 @@
     <string name="about_crash_recorded">A crash was recorded</string>
     <string name="about_crash_share">Share the last crash report</string>
     <string name="about_crash_clear">Clear the crash report</string>
+    <string name="about_check_updates">Check for updates</string>
+    <string name="about_update_checking">Checking…</string>
+    <string name="about_update_none">You have the latest version</string>
+    <string name="about_update_failed">Could not check: %1$s</string>
+    <string name="about_update_available">%1$s is available.</string>
+    <string name="about_update_action">Update</string>
+    <string name="about_update_not_now">Not now</string>
+    <string name="about_update_downloading">Downloading the update…</string>
+    <string name="about_update_install_started">Follow the prompt from Android to finish installing</string>
+    <string name="about_update_download_failed">Could not install the update: %1$s</string>
     <string name="crash_mail_subject">atomic crash report</string>
     <string name="support_email" translatable="false">shresthasubhaneet+atomic@gmail.com</string>
     <string name="source_url" translatable="false">https://github.com/subhaneetshrestha/atomic-launcher</string>
