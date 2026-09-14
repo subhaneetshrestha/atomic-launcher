@@ -319,6 +319,7 @@
 
     <!-- The theme editor -->
     <string name="editor_title">Edit theme</string>
+    <string name="editor_advanced">Advanced</string>
     <string name="editor_name">Name</string>
     <string name="editor_author">Author</string>
     <string name="editor_colours">Colours</string>

@@ -260,6 +260,7 @@ class SettingsActivity : ThemedActivity() {
             ScreenId.APP_PICKER -> AppPickerScreen(arg)
             ScreenId.THEME -> ThemeScreen()
             ScreenId.THEME_EDITOR -> ThemeEditorScreen()
+            ScreenId.THEME_EDITOR_ADVANCED -> ThemeEditorAdvancedScreen()
             ScreenId.BACKGROUND -> BackgroundScreen()
             ScreenId.SOURCE_PICKER -> SourcePickerScreen()
             ScreenId.SOURCE_INFO -> SourceInfoScreen()
@@ -622,6 +623,7 @@ class SettingsActivity : ThemedActivity() {
         APP_PICKER,
         THEME,
         THEME_EDITOR,
+        THEME_EDITOR_ADVANCED,
         BACKGROUND,
         SOURCE_PICKER,
         SOURCE_INFO,
@@ -1539,10 +1541,9 @@ class SettingsActivity : ThemedActivity() {
             taps.clear()
             val theme = settings.settings.theme
             meta(theme)
-            colours(theme)
-            typography(theme)
-            layout(theme)
-            badge(theme)
+            everydayColours(theme)
+            homeSize(theme)
+            add(Row(getString(R.string.editor_advanced))) { push(ThemeEditorAdvancedScreen()) }
             adapter.rows = rows.toList()
             adapter.notifyDataSetChanged()
         }
@@ -1561,23 +1562,97 @@ class SettingsActivity : ThemedActivity() {
             }
         }
 
-        private fun colours(theme: Theme) {
+        /** The three colours that change what the home screen looks like at a glance. */
+        private fun everydayColours(theme: Theme) {
             add(Row(getString(R.string.editor_colours), isHeader = true))
             val day = theme.colors
-            colour(
-                R.string.editor_background,
-                day.background,
-            ) { v -> edit { it.copy(colors = it.colors.copy(background = v)) } }
-            colour(
-                R.string.editor_text,
-                day.text,
-                allowAuto = true,
-            ) { v -> edit { it.copy(colors = it.colors.copy(text = v)) } }
+            colour(R.string.editor_background, day.background) { v ->
+                edit { it.copy(colors = it.colors.copy(background = v)) }
+            }
+            colour(R.string.editor_text, day.text, allowAuto = true) { v ->
+                edit { it.copy(colors = it.colors.copy(text = v)) }
+            }
+            colour(R.string.editor_accent, day.accent) { v -> edit { it.copy(colors = it.colors.copy(accent = v)) } }
+        }
+
+        /** The one size most people ever touch: the app names themselves. */
+        private fun homeSize(theme: Theme) {
+            size(R.string.editor_size_home, theme.typography.sizes.homeSp) { v ->
+                edit { it.copy(typography = it.typography.copy(sizes = it.typography.sizes.copy(homeSp = v))) }
+            }
+        }
+
+        private fun colour(
+            titleRes: Int,
+            value: String,
+            allowAuto: Boolean = false,
+            apply: (String) -> Unit,
+        ) {
+            val shown = if (value == ColorValue.AUTO) getString(R.string.editor_auto) else value
+            add(Row(getString(titleRes), shown)) { askColour(titleRes, value, allowAuto, apply) }
+        }
+
+        private fun size(
+            titleRes: Int,
+            value: Float,
+            apply: (Float) -> Unit,
+        ) {
+            add(Row(getString(titleRes), getString(R.string.editor_sp, trim(value)))) {
+                askNumber(titleRes, trim(value), decimal = true, apply)
+            }
+        }
+
+        private fun trim(value: Float): String =
+            if (value == value.toInt().toFloat()) value.toInt().toString() else value.toString()
+
+        private fun add(
+            row: Row,
+            tap: () -> Unit = {},
+        ) {
+            rows += row
+            taps += tap
+        }
+
+        private fun edit(transform: (Theme) -> Theme) {
+            settings.update { it.copy(theme = ThemeEdits.edit(it.theme, transform)) }
+        }
+    }
+
+    /**
+     * Everything the everyday editor leaves out: the secondary text colour, night overrides, the
+     * font itself, every size but the home one, layout and padding, and the badge's geometry. Nine
+     * rows fold to eleven here plus whatever night colours add — detail that was in the way of the
+     * three colours and one size most people came to change.
+     */
+    private inner class ThemeEditorAdvancedScreen : Screen(ScreenId.THEME_EDITOR_ADVANCED, R.string.editor_advanced) {
+        private lateinit var adapter: RowAdapter
+        private val rows = mutableListOf<Row>()
+        private val taps = mutableListOf<() -> Unit>()
+
+        override fun createView(): View {
+            adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
+            refresh()
+            return list(adapter, onClick = { position -> taps.getOrNull(position)?.invoke() })
+        }
+
+        override fun refresh() {
+            rows.clear()
+            taps.clear()
+            val theme = settings.settings.theme
+            secondaryAndNight(theme)
+            typography(theme)
+            layout(theme)
+            badge(theme)
+            adapter.rows = rows.toList()
+            adapter.notifyDataSetChanged()
+        }
+
+        private fun secondaryAndNight(theme: Theme) {
+            add(Row(getString(R.string.editor_colours), isHeader = true))
+            val day = theme.colors
             colour(R.string.editor_text_secondary, day.textSecondary, allowAuto = true) { v ->
                 edit { it.copy(colors = it.colors.copy(textSecondary = v)) }
             }
-            colour(R.string.editor_accent, day.accent) { v -> edit { it.copy(colors = it.colors.copy(accent = v)) } }
-
             val night = theme.darkColors
             add(
                 Row(
@@ -1635,9 +1710,6 @@ class SettingsActivity : ThemedActivity() {
                 edit { it.copy(typography = it.typography.copy(italic = !typography.italic)) }
             }
             val sizes = typography.sizes
-            size(R.string.editor_size_home, sizes.homeSp) { v ->
-                edit { it.copy(typography = it.typography.copy(sizes = it.typography.sizes.copy(homeSp = v))) }
-            }
             size(R.string.editor_size_drawer, sizes.drawerSp) { v ->
                 edit { it.copy(typography = it.typography.copy(sizes = it.typography.sizes.copy(drawerSp = v))) }
             }
