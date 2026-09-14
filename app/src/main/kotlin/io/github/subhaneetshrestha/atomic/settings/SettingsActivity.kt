@@ -53,6 +53,7 @@ import io.github.subhaneetshrestha.atomic.core.theme.ColorsOverride
 import io.github.subhaneetshrestha.atomic.core.theme.ConsentKind
 import io.github.subhaneetshrestha.atomic.core.theme.DecodeResult
 import io.github.subhaneetshrestha.atomic.core.theme.EdgeExclusion
+import io.github.subhaneetshrestha.atomic.core.theme.GestureId
 import io.github.subhaneetshrestha.atomic.core.theme.HAlign
 import io.github.subhaneetshrestha.atomic.core.theme.HomeLimits
 import io.github.subhaneetshrestha.atomic.core.theme.InfoLineId
@@ -248,6 +249,7 @@ class SettingsActivity : ThemedActivity() {
             ScreenId.HOME_APPS -> HomeAppsScreen()
             ScreenId.HIDDEN_APPS -> HiddenAppsScreen()
             ScreenId.GESTURES -> GesturesScreen()
+            ScreenId.GESTURE_ADD -> GestureAddScreen()
             ScreenId.BADGES -> BadgesScreen()
             ScreenId.SYSTEM -> SystemScreen()
             ScreenId.INFO_LINES -> InfoLinesScreen()
@@ -436,23 +438,35 @@ class SettingsActivity : ThemedActivity() {
             .show()
     }
 
-    /** A colour typed as #RRGGBB, or the word that means "follow the text" where that is allowed. */
+    /**
+     * A colour is shown, not typed: swatches drawn from the current theme and the four built-in
+     * ones, three sliders whose tracks show what they do, and a hex field for anyone who already
+     * has one. See [ColourPicker].
+     */
     private fun askColour(
         titleRes: Int,
         current: String,
         allowAuto: Boolean = false,
         apply: (String) -> Unit,
     ) {
-        val input =
-            EditText(this).apply {
-                inputType = InputType.TYPE_CLASS_TEXT
-                setHint(R.string.background_colour_hint)
-                setText(current)
+        ColourPicker.show(this, titleRes, current, allowAuto, quickSwatches(), apply)
+    }
+
+    /** The colours a person is most likely to want again: their own theme's, and the four shipped ones. */
+    private fun quickSwatches(): List<Int> {
+        val tokens = TokenColors(this)
+
+        fun resolve(value: String): Int? =
+            when {
+                ColorValue.isHex(value) -> runCatching { android.graphics.Color.parseColor(value) }.getOrNull()
+                ColorValue.isToken(value) -> tokens(value.substringAfterLast('/'))
+                else -> null
             }
-        prompt(titleRes, if (allowAuto) getString(R.string.editor_auto_hint) else null, input) {
-            val value = ColorValue.normalize(input.text.toString(), allowAuto = allowAuto)
-            if (value == null) toast(getString(R.string.background_colour_invalid)) else apply(value)
-        }
+        val theme = settings.settings.theme
+        val ownRoles = listOf(theme.colors.background, theme.colors.text, theme.colors.accent)
+        val builtinRoles =
+            BuiltinThemes.all.flatMap { listOf(it.colors.background, it.colors.text, it.colors.accent) }
+        return (ownRoles + builtinRoles).mapNotNull(::resolve).distinct()
     }
 
     /** A number, whole or not. Anything outside the allowed range is pulled into it when stored. */
@@ -597,6 +611,7 @@ class SettingsActivity : ThemedActivity() {
         HOME_APPS,
         HIDDEN_APPS,
         GESTURES,
+        GESTURE_ADD,
         BADGES,
         BADGE_APPS,
         SYSTEM,
@@ -775,27 +790,63 @@ class SettingsActivity : ThemedActivity() {
         }
     }
 
-    /** Everything the home screen answers to, and what each one does at the moment. */
+    /**
+     * Lists what is bound, and nothing else. Eighteen surfaces exist (four swipes, four long
+     * swipes, double tap, long press, and a tap and a long press on each of four info lines), and
+     * a fresh install binds eight of them \u2014 the other ten used to be rows that said the gesture
+     * does nothing, which is a form to fill in, not a list of what the phone already does. Every
+     * surface is still reachable, one tap away, behind [gestures_add].
+     */
     private inner class GesturesScreen : Screen(ScreenId.GESTURES, R.string.settings_gestures) {
         private lateinit var adapter: RowAdapter
+        private val rows = mutableListOf<Row>()
+        private val taps = mutableListOf<() -> Unit>()
 
         override fun createView(): View {
             adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
             refresh()
-            return list(adapter, onClick = ::choose)
+            return list(adapter, onClick = { position -> taps.getOrNull(position)?.invoke() })
         }
 
         override fun refresh() {
+            rows.clear()
+            taps.clear()
+            val bound = BindingSurface.all.withIndex().filter { (_, s) -> settings.settings.binding(s) != Action.None }
+            if (bound.isEmpty()) {
+                add(Row(getString(R.string.gestures_none_bound), enabled = false))
+            }
+            for ((index, surface) in bound) {
+                add(
+                    Row(ActionLabels.of(this@SettingsActivity, surface), boundTo(surface)),
+                ) { push(ActionPickerScreen(index)) }
+            }
+            add(Row(getString(R.string.gestures_add))) { push(GestureAddScreen()) }
+
             val gestures = settings.settings.gestures
-            adapter.rows =
-                listOf(
-                    Row(getString(R.string.gestures_haptics), checked = gestures.haptics),
-                    Row(
-                        getString(R.string.gestures_edges),
-                        getString(R.string.gestures_edges_detail),
-                        checked = gestures.edgeExclusion == EdgeExclusion.BOTH,
-                    ),
-                ) + BindingSurface.all.map { Row(ActionLabels.of(this@SettingsActivity, it), boundTo(it)) }
+            add(Row(getString(R.string.gestures_general), isHeader = true))
+            add(
+                Row(getString(R.string.gestures_haptics), checked = gestures.haptics),
+            ) { settings.update { it.copy(gestures = it.gestures.copy(haptics = !it.gestures.haptics)) } }
+            add(
+                Row(
+                    getString(R.string.gestures_edges),
+                    getString(R.string.gestures_edges_detail),
+                    checked = gestures.edgeExclusion == EdgeExclusion.BOTH,
+                ),
+            ) {
+                settings.update {
+                    val next =
+                        if (it.gestures.edgeExclusion ==
+                            EdgeExclusion.BOTH
+                        ) {
+                            EdgeExclusion.NONE
+                        } else {
+                            EdgeExclusion.BOTH
+                        }
+                    it.copy(gestures = it.gestures.copy(edgeExclusion = next))
+                }
+            }
+            adapter.rows = rows.toList()
             adapter.notifyDataSetChanged()
         }
 
@@ -807,31 +858,66 @@ class SettingsActivity : ThemedActivity() {
             return if (problem == null) described else "$described \u2014 $problem"
         }
 
-        private fun choose(position: Int) {
-            when (position) {
-                0 -> {
-                    settings.update { it.copy(gestures = it.gestures.copy(haptics = !it.gestures.haptics)) }
-                }
+        private fun add(
+            row: Row,
+            tap: () -> Unit = {},
+        ) {
+            rows += row
+            taps += tap
+        }
+    }
 
-                1 -> {
-                    settings.update {
-                        val next =
-                            if (it.gestures.edgeExclusion ==
-                                EdgeExclusion.BOTH
-                            ) {
-                                EdgeExclusion.NONE
-                            } else {
-                                EdgeExclusion.BOTH
-                            }
-                        it.copy(gestures = it.gestures.copy(edgeExclusion = next))
-                    }
-                }
+    /**
+     * Every surface that is not already bound, grouped the way a person thinks about them rather
+     * than the order the schema declares them in. Choosing one goes straight into the same action
+     * picker binding one from the list above does; there is no second, simpler picker for "new"
+     * gestures, because there is nothing simpler to offer.
+     */
+    private inner class GestureAddScreen : Screen(ScreenId.GESTURE_ADD, R.string.gestures_add) {
+        override fun createView(): View {
+            val free = BindingSurface.all.withIndex().filter { (_, s) -> settings.settings.binding(s) == Action.None }
+            val rows = mutableListOf<Row>()
+            val taps = mutableListOf<() -> Unit>()
 
-                else -> {
-                    push(ActionPickerScreen(position - GESTURE_HEADER_ROWS))
+            fun add(
+                row: Row,
+                tap: () -> Unit = {},
+            ) {
+                rows += row
+                taps += tap
+            }
+            // Swipes, long swipes, taps and holds, then the info lines: the order a person reaches
+            // for them in, not the order the schema happens to declare them.
+            for ((groupLabel, matches) in groups) {
+                val members = free.filter { (_, surface) -> matches(surface) }
+                if (members.isEmpty()) continue
+                add(Row(getString(groupLabel), isHeader = true))
+                for ((index, surface) in members) {
+                    add(Row(ActionLabels.of(this@SettingsActivity, surface))) { push(ActionPickerScreen(index)) }
                 }
             }
+            val adapter = RowAdapter(this@SettingsActivity, colors, rows)
+            return list(adapter, onClick = { position -> taps.getOrNull(position)?.invoke() })
         }
+
+        private val groups: List<Pair<Int, (BindingSurface) -> Boolean>> =
+            listOf(
+                R.string.gestures_group_swipes to
+                    { s: BindingSurface ->
+                        s is BindingSurface.Gesture && !s.id.isLongSwipe &&
+                            s.id != GestureId.DOUBLE_TAP &&
+                            s.id != GestureId.LONG_PRESS
+                    },
+                R.string.gestures_group_long_swipes to
+                    { s: BindingSurface -> s is BindingSurface.Gesture && s.id.isLongSwipe },
+                R.string.gestures_group_taps to
+                    { s: BindingSurface ->
+                        s is BindingSurface.Gesture &&
+                            (s.id == GestureId.DOUBLE_TAP || s.id == GestureId.LONG_PRESS)
+                    },
+                R.string.gestures_group_info to
+                    { s: BindingSurface -> s is BindingSurface.InfoTap || s is BindingSurface.InfoLongPress },
+            )
     }
 
     /** What one surface should do. Everything is listed; what cannot run says why and stays unselectable. */
@@ -2230,8 +2316,6 @@ class SettingsActivity : ThemedActivity() {
         const val STATE_ARGS = "args"
         const val STATE_SCROLL = "scroll"
 
-        /** The haptics and edge rows sit above the list of surfaces. */
-        const val GESTURE_HEADER_ROWS = 2
         const val MAX_IMPORT_BYTES = 1_000_000
     }
 }

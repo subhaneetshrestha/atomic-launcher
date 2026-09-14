@@ -110,12 +110,14 @@ home
 swipe $MIDX $((H / 4)) $MIDX $((H - H / 4))
 [[ "$(top)" == *"$PKG"* ]] && ok "swipe down, bound to the shade, leaves the home screen up" || ko "swipe down leaves the home screen up"
 
-# 4. The gesture list shows every surface, with a reason where there is one.
+# 4. The gesture list shows what is bound, and nothing else — a fresh install binds eight of the
+# eighteen surfaces (four swipes, hold, and a tap on the clock, date and battery); the other ten
+# are one tap away behind "Add a gesture" rather than listed as rows that say "nothing".
 open_gesture_settings || ko "opening the gesture settings"
-for surface in "Swipe up" "Swipe down" "Swipe left" "Swipe right" "Long swipe up" "Double tap" "Hold" "Tap the clock" "Hold the battery"; do
-  scroll_to "$surface" || ko "the list shows '$surface'"
+for surface in "Swipe up" "Swipe down" "Swipe left" "Swipe right" "Hold" "Tap the clock"; do
+  scroll_to "$surface" || ko "the bound list shows '$surface'"
 done
-ok "the gesture list shows the surfaces"
+ok "the bound gesture list shows what is already set"
 # Phase 3 left the six accessibility actions and three launcher surfaces saying they would arrive
 # later; Phase 8 built every one of them, so nothing on this screen may still say so. What an
 # action needs now is a permission or a newer Android, and the picker below says which.
@@ -127,7 +129,16 @@ else
 fi
 grep -qi 'Camera' <<<"$ui" && ok "the list shows what each gesture does" || ko "the list shows what each gesture does"
 
-# 5. Rebinding a gesture through the picker.
+# 4b. Everything not yet bound is grouped, one tap away, behind "Add a gesture".
+find_and_tap "Add a gesture" || ko "opening the add-a-gesture screen"
+ui=$(dump)
+has_text "Long swipes" "$ui" && has_text "Double tap and long press" "$ui" && has_text "Info lines" "$ui" &&
+  ok "unbound surfaces are grouped by kind" || ko "unbound surfaces are grouped by kind"
+scroll_to "Long swipe up" && ok "an unbound long swipe is offered" || ko "an unbound long swipe is offered"
+scroll_to "Double tap" && ok "double tap is offered" || ko "double tap is offered"
+
+# 5. Rebinding a gesture through the picker — double tap starts unbound, so it is reached from the
+# add screen just opened, not the bound list above it.
 find_and_tap "Double tap" || ko "opening the picker"
 ui=$(dump)
 has_text "Nothing" "$ui" && contains_text "Open an app" "$ui" && ok "the picker offers nothing and apps" || ko "the picker offers its choices"

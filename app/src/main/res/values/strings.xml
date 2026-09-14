@@ -147,6 +147,13 @@
     <string name="gestures_haptics">Buzz on gestures</string>
     <string name="gestures_edges">Take over the side edges</string>
     <string name="gestures_edges_detail">Swipes from the left and right edges come to atomic instead of going back.</string>
+    <string name="gestures_add">Add a gesture</string>
+    <string name="gestures_none_bound">No gesture is bound to anything. Add one to open an app, a link, or an action, with a swipe, a tap or a press.</string>
+    <string name="gestures_group_swipes">Swipes</string>
+    <string name="gestures_group_long_swipes">Long swipes</string>
+    <string name="gestures_group_taps">Double tap and long press</string>
+    <string name="gestures_group_info">Info lines</string>
+    <string name="gestures_general">General</string>
     <string name="picker_title">What should it do?</string>
     <string name="action_none">Nothing</string>
     <string name="action_open_app">Open an app\u2026</string>
@@ -355,6 +362,11 @@
     <string name="editor_badge_text">Number colour</string>
     <string name="editor_auto">Follow the name</string>
     <string name="editor_auto_hint">A colour like #RRGGBB, or the word auto to follow the name</string>
+    <string name="editor_hue">Hue</string>
+    <string name="editor_saturation">Saturation</string>
+    <string name="editor_brightness">Brightness</string>
+    <string name="editor_opacity">Opacity</string>
+    <string name="background_colour_hex">Hex</string>
     <string name="editor_sp">%s sp</string>
     <string name="editor_dp">%d dp</string>
     <string name="editor_number_invalid">That is not a number in range</string>
