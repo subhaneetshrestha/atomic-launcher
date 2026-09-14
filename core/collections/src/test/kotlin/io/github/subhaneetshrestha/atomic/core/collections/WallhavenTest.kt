@@ -41,9 +41,31 @@ class WallhavenTest {
 
     @Test
     fun `addresses this cannot ask for keylessly are refused rather than guessed at`() {
+        // The bare favourites page lists collections; it is not one, so there is nothing to fetch
+        // without a second, list-and-choose request this rewrite deliberately does not make.
         assertNull(Wallhaven.apiUrlFor("https://wallhaven.cc/user/someone/favorites"))
         assertNull(Wallhaven.apiUrlFor("https://example.org/search?q=x"))
         assertNull(Wallhaven.apiUrlFor("https://w.wallhaven.cc/full/ab/wallhaven-abc.jpg"))
+    }
+
+    @Test
+    fun `a public collection is read keylessly and is still forced to the tame images`() {
+        val api = Wallhaven.apiUrlFor("https://wallhaven.cc/user/someone/favorites/12345")
+        assertEquals("https://wallhaven.cc/api/v1/collections/someone/12345?purity=100", api)
+    }
+
+    @Test
+    fun `a collection username keeps whatever case it was pasted in`() {
+        // Wallhaven usernames are case-sensitive; the rest of the address is folded to lower case
+        // for every other route, and a collection must not go through that fold.
+        val api = Wallhaven.apiUrlFor("https://wallhaven.cc/USER/SomeUser/FAVORITES/999")
+        assertEquals("https://wallhaven.cc/api/v1/collections/SomeUser/999?purity=100", api)
+    }
+
+    @Test
+    fun `a collection address with anything past the id is refused`() {
+        assertNull(Wallhaven.apiUrlFor("https://wallhaven.cc/user/someone/favorites/12345/extra"))
+        assertNull(Wallhaven.apiUrlFor("https://wallhaven.cc/user/someone/favorites/not-a-number"))
     }
 
     @Test

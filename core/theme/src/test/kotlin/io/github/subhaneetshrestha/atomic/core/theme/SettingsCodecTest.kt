@@ -134,6 +134,35 @@ class SettingsCodecTest {
     }
 
     @Test
+    fun `a source a newer build invented degrades to a plain pasted address`() {
+        val text =
+            """
+            { "schema": 1, "meta": { "id": "fancy" },
+              "background": { "collection": { "url": "https://example.org/list.txt", "source": "a-future-source" } } }
+            """
+
+        val result = assertIs<DecodeResult.Ok<Theme>>(SettingsCodec.decodeTheme(text, appVersionCode = 1))
+
+        assertEquals("https://example.org/list.txt", result.value.background.collection.url, "the address is kept")
+        assertEquals(null, result.value.background.collection.source, "the unknown source is not")
+        assertEquals(listOf("background.collection.source"), result.warnings.map { it.path })
+    }
+
+    @Test
+    fun `a source this build knows survives untouched`() {
+        val text =
+            """
+            { "schema": 1, "meta": { "id": "fancy" },
+              "background": { "collection": { "url": "https://wallhaven.cc/search?q=x", "source": "wallhaven_search" } } }
+            """
+
+        val result = assertIs<DecodeResult.Ok<Theme>>(SettingsCodec.decodeTheme(text, appVersionCode = 1))
+
+        assertEquals("wallhaven_search", result.value.background.collection.source)
+        assertEquals(emptyList(), result.warnings)
+    }
+
+    @Test
     fun `app lists are validated, de-duplicated and capped`() {
         val filler = (1..20).joinToString(",") { """{ "component": "com.filler.app$it/.Main" }""" }
         val longLabel = "x".repeat(60)

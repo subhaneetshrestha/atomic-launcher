@@ -4,10 +4,15 @@ import java.net.URI
 import java.net.URISyntaxException
 
 /**
- * Wallhaven is the one host with a rule of its own: its pages are HTML, but the same search is
- * available keyless as JSON. A pasted page address is rewritten to that API before it is fetched,
- * and the rewrite forces `purity=100`, so the launcher can only ever be handed the tame images —
- * this is a home screen, and nobody is watching what it downloads.
+ * Wallhaven is the one host with a rule of its own: its pages are HTML, but the same search — and a
+ * user's own *public* collection — is available keyless as JSON. A pasted page address is rewritten
+ * to that API before it is fetched, and the rewrite forces `purity=100` even on a collection, where
+ * the server does not apply that default itself: an unforced collection fetch has been measured
+ * widening by over 50%. This is a home screen, and nobody is watching what it downloads.
+ *
+ * A *private* collection needs a key this app has no way to ask for safely (see the design note on
+ * why an open-source app cannot hold one), so it is out of reach — but most collections are public,
+ * and public is all this reads.
  *
  * An API key is never carried over. Keyless callers are allowed 45 requests a minute; the fetcher
  * keeps [MIN_SPACING_MS] between two requests to the host, which stays well inside that.
@@ -39,7 +44,7 @@ object Wallhaven {
 
     /**
      * The keyless API address for a Wallhaven page, or null when the address is not one this
-     * knows how to ask for (a user's collection, say, which needs a key).
+     * knows how to ask for.
      */
     fun apiUrlFor(url: String): String? {
         if (!isWallhavenPage(url)) return null
@@ -49,12 +54,19 @@ object Wallhaven {
             } catch (e: URISyntaxException) {
                 return null
             }
-        val path =
+        val rawPath =
             uri.path
                 .orEmpty()
                 .trimEnd('/')
-                .lowercase()
                 .ifEmpty { "/" }
+        // A public collection is keyless too: /api/v1/collections/<name>/<id> answers to anyone.
+        // The username keeps whatever case it was pasted in — Wallhaven's own is case-sensitive —
+        // so this is matched before the path below is folded to lower case for everything else.
+        COLLECTION_PATH.matchEntire(rawPath)?.let { match ->
+            val (name, id) = match.destructured
+            return "$API/collections/$name/$id?purity=100"
+        }
+        val path = rawPath.lowercase()
         val id = path.removePrefix("/w/")
         if (path.startsWith("/w/")) {
             return if (id.matches(WALLPAPER_ID)) "$API/w/$id" else null
@@ -92,4 +104,7 @@ object Wallhaven {
     private val SAFE_VALUE = Regex("^[^\\s&#?/]+$")
 
     private val WALLPAPER_ID = Regex("^[a-z0-9]{1,16}$")
+
+    /** `/user/<name>/favorites/<id>` — the address a browser's own share link gives you. */
+    private val COLLECTION_PATH = Regex("(?i)^/user/([A-Za-z0-9_-]{1,50})/favorites/([0-9]{1,15})$")
 }

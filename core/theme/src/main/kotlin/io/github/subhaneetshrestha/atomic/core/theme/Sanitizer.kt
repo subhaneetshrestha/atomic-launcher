@@ -1,6 +1,7 @@
 package io.github.subhaneetshrestha.atomic.core.theme
 
 import io.github.subhaneetshrestha.atomic.core.collections.UrlRules
+import io.github.subhaneetshrestha.atomic.core.collections.WallpaperSources
 
 /**
  * Second pass after typed decoding: values are pulled into their allowed ranges and every
@@ -335,6 +336,11 @@ internal class Sanitizer {
     /**
      * An address the fetcher would refuse is cleared rather than kept: a theme that arrived with
      * an http:// collection must not leave a setting behind that looks like it is working.
+     *
+     * A `source` this build does not recognise — an id a newer version invented — is nulled rather
+     * than kept or refused, and [url] is left exactly as it was. That degrades an unknown source to
+     * plain "pasted address" behaviour instead of the document going dark: `url` is still a real,
+     * fetchable address, so the picker shows it as a custom one and the rotation keeps working.
      */
     private fun collection(
         config: CollectionConfig,
@@ -343,8 +349,17 @@ internal class Sanitizer {
         val url = config.url.trim()
         val problem = if (url.isEmpty()) null else UrlRules.problemWith(url)
         if (problem != null) warnings += Warning("$path.url", "the address $problem; no images will be fetched")
+        val source = config.source?.takeIf { WallpaperSources.byId(it) != null }
+        if (config.source != null && source == null) {
+            warnings +=
+                Warning(
+                    "$path.source",
+                    "'${config.source}' is not a source this build knows; reading the address plainly",
+                )
+        }
         return config.copy(
             url = if (problem == null) url else "",
+            source = source,
             intervalMinutes =
                 clamp(
                     config.intervalMinutes,

@@ -211,6 +211,43 @@
     <string name="background_address_help">A list of image addresses, a feed, a JSON document, a Wallhaven search, or one image. It has to start with https.</string>
     <string name="background_address_invalid">That address %s</string>
     <string name="background_address_host">Images will be downloaded from %s whenever the background changes.</string>
+
+    <string name="background_source">Source</string>
+    <string name="background_source_none">Not set</string>
+    <string name="background_address_row">Address</string>
+
+    <string name="source_wallhaven_search">Wallhaven — random search</string>
+    <string name="source_wallhaven_search_detail">A fresh batch of portrait wallpapers, safe content only, every time the collection refreshes. Nothing to type.</string>
+    <string name="source_wallhaven_collection">Wallhaven — your collection</string>
+    <string name="source_wallhaven_collection_detail">Open your favourites or a collection on wallhaven.cc and copy its address. Only public collections can be read this way.</string>
+    <string name="source_own_server">Your own server</string>
+    <string name="source_own_server_detail">An nginx, Caddy or Apache directory of images you (or anyone) host. Paste the folder\'s address.</string>
+    <string name="source_list_file">A list file</string>
+    <string name="source_list_file_detail">A plain text file, one image address per line. Works with almost anything that can publish a text file.</string>
+    <string name="source_mastodon">Mastodon or Pixelfed</string>
+    <string name="source_mastodon_detail">A public account\'s feed address, such as https://example.social/@you.rss</string>
+    <string name="source_nextcloud">Nextcloud</string>
+    <string name="source_nextcloud_detail">A public share link to a folder of images.</string>
+    <string name="source_custom">Custom address</string>
+    <string name="source_custom_detail">Anything else this list does not name — the launcher works out what it is when it fetches it.</string>
+
+    <string name="source_unavailable_header">Not available</string>
+    <string name="source_unavailable_google_photos">Google Photos</string>
+    <string name="source_unavailable_google_photos_reason">Needs a private key this open-source app cannot hold safely. Export your album to a folder and use \"your own server\" or \"a list file\" instead.</string>
+    <string name="source_unavailable_unsplash">Unsplash</string>
+    <string name="source_unavailable_unsplash_reason">Its API terms prohibit wallpaper applications outright.</string>
+
+    <string name="source_address_help_wallhaven_collection">Open your favourites or a collection on wallhaven.cc, then copy the page address — for example https://wallhaven.cc/user/name/favorites/12345. It has to be public.</string>
+    <string name="source_address_help_own_server">The folder\'s address, such as https://example.org/wallpapers/. A trailing slash is added for you if you leave it off.</string>
+    <string name="source_address_help_list_file">The address of a plain text file, one image address per line.</string>
+    <string name="source_address_help_mastodon">A public account\'s feed address, such as https://example.social/@you.rss</string>
+    <string name="source_address_help_nextcloud">A public share link to a folder of images.</string>
+
+    <string name="background_about_source">About this source</string>
+    <string name="source_wallhaven_licence">Wallhaven asserts no licence over what it hosts — its own terms say only that images remain the property of their original owners. atomic cannot name a rights holder for what it shows you; treat these images as unlicensed unless you know otherwise.</string>
+    <string name="source_info_privacy">Each image is fetched by this device directly from its source and drawn behind the app names. Nothing is uploaded, shared or shown to anyone else.</string>
+    <string name="source_info_open">Open the source</string>
+    <string name="source_info_read_more">Read more about this source</string>
     <string name="background_interval">Change every</string>
     <string name="background_unmetered">Only on wi‑fi</string>
     <string name="background_unmetered_detail">Never spends mobile data on a wallpaper</string>

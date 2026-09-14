@@ -10,7 +10,7 @@ Nothing, unless you ask for it, and then only to a host you typed yourself:
 
 | When | Where to | What is sent |
 |---|---|---|
-| You set a background collection address | that address, and the image URLs it lists | an HTTPS GET, `User-Agent: atomic-launcher/io.github.subhaneetshrestha.atomic (Android <release>)`, plus `If-None-Match`/`If-Modified-Since` from the previous fetch |
+| You set a background collection address, or pick a named source in Settings → Background → Source | that address, and the image URLs it lists — a named source only ever resolves to an address, the same as one you type | an HTTPS GET, `User-Agent: atomic-launcher/io.github.subhaneetshrestha.atomic (Android <release>; +https://github.com/subhaneetshrestha/atomic-launcher)`, plus `If-None-Match`/`If-Modified-Since` from the previous fetch |
 | You open an `atomic://theme?url=…` link and confirm it | that address | the same GET |
 | You send a crash report from About | your mail app, addressed to the maintainer | the report text, which you can read and edit first |
 

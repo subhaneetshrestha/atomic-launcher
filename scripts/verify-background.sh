@@ -139,20 +139,21 @@ shows_wallpaper "$flags" && ok "the window asks for the wallpaper behind it" ||
   ko "the window asks for the wallpaper behind it ($flags)"
 grep -q '"mode":"wallpaper"' <<<"$(settings_json)" && ok "and the choice is written down" || ko "and the choice is written down"
 
-# 5. A collection address is checked, and the host is named before it is accepted.
+# 5. A collection address is checked, and the host is named before it is accepted. The default
+# source is "Custom address" (no source picked yet), which is the one that shows an Address row.
 open_background_settings || ko "reopening the background settings"
 tap_text "Image collection" || ko "choosing the collection"
 ui=$(dump)
-has_text "Collection address" "$ui" && has_text "Change every" "$ui" && has_text "Only on wi‑fi" "$ui" &&
-  ok "the collection settings appear" || ko "the collection settings appear"
-tap_text "Collection address" || ko "opening the address dialog"
+has_text "Source" "$ui" && has_text "Address" "$ui" && has_text "Change every" "$ui" &&
+  has_text "Only on wi‑fi" "$ui" && ok "the collection settings appear" || ko "the collection settings appear"
+tap_text "Address" || ko "opening the address dialog"
 sh input text "http://example.org/list.txt" >/dev/null; wait_s 1
 tap_text "OK" || ko "confirming the bad address"
 wait_s 2
 grep -q '"url":"http://' <<<"$(settings_json)" && ko "a plaintext address is refused" || ok "a plaintext address is refused"
 
-tap_text "Collection address" >/dev/null 2>&1 || open_background_settings
-tap_text "Collection address" >/dev/null 2>&1 || true
+tap_text "Address" >/dev/null 2>&1 || open_background_settings
+tap_text "Address" >/dev/null 2>&1 || true
 clear_field 40
 sh input text "$RAW/collection.txt" >/dev/null; wait_s 1
 tap_text "OK" || ko "confirming the address"

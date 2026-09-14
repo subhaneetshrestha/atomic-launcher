@@ -35,7 +35,10 @@ import io.github.subhaneetshrestha.atomic.background.BackgroundController
 import io.github.subhaneetshrestha.atomic.background.BackgroundEngine
 import io.github.subhaneetshrestha.atomic.background.BackgroundStatus
 import io.github.subhaneetshrestha.atomic.background.SkipReason
+import io.github.subhaneetshrestha.atomic.core.collections.SourceInput
 import io.github.subhaneetshrestha.atomic.core.collections.UrlRules
+import io.github.subhaneetshrestha.atomic.core.collections.WallpaperSource
+import io.github.subhaneetshrestha.atomic.core.collections.WallpaperSources
 import io.github.subhaneetshrestha.atomic.core.theme.Action
 import io.github.subhaneetshrestha.atomic.core.theme.ActionGroup
 import io.github.subhaneetshrestha.atomic.core.theme.Background
@@ -256,6 +259,8 @@ class SettingsActivity : ThemedActivity() {
             ScreenId.THEME -> ThemeScreen()
             ScreenId.THEME_EDITOR -> ThemeEditorScreen()
             ScreenId.BACKGROUND -> BackgroundScreen()
+            ScreenId.SOURCE_PICKER -> SourcePickerScreen()
+            ScreenId.SOURCE_INFO -> SourceInfoScreen()
             ScreenId.APPEARANCE -> AppearanceScreen()
             ScreenId.BACKUP -> BackupScreen()
             ScreenId.ABOUT -> AboutScreen()
@@ -498,6 +503,93 @@ class SettingsActivity : ThemedActivity() {
             .show()
     }
 
+    /**
+     * The address is checked, and then the host it would download from is named out loud — on
+     * every path, named source or not, because a named source is not more trustworthy than a
+     * typed one, it is just pre-typed. [sourceId] is stored alongside the address once it is
+     * accepted, so the picker knows which source this address belongs to; clearing the address
+     * keeps the source selected but unconfigured, rather than forgetting it was chosen at all.
+     */
+    private fun askForCollection(
+        current: String,
+        sourceId: String? = null,
+        helpRes: Int = R.string.background_address_help,
+        appendSlash: Boolean = false,
+    ) {
+        val input =
+            EditText(this).apply {
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+                setHint(R.string.background_address_hint)
+                setText(current)
+            }
+        prompt(R.string.background_address, getString(helpRes), input) {
+            var url = input.text.toString().trim()
+            if (url.isEmpty()) {
+                settings.update {
+                    it.copy(theme = it.theme.copy(background = it.theme.background.withCollectionUrl("", sourceId)))
+                }
+                return@prompt
+            }
+            if (appendSlash && !url.endsWith("/")) url += "/"
+            val problem = UrlRules.problemWith(url)
+            if (problem != null) {
+                toast(getString(R.string.background_address_invalid, problem))
+                return@prompt
+            }
+            AlertDialog
+                .Builder(this)
+                .setTitle(R.string.background_address)
+                .setMessage(getString(R.string.background_address_host, UrlRules.hostOf(url).orEmpty()))
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    settings.update {
+                        it.copy(
+                            theme = it.theme.copy(background = it.theme.background.withCollectionUrl(url, sourceId)),
+                        )
+                    }
+                }.setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+    }
+
+    private fun Background.withCollectionUrl(
+        url: String,
+        sourceId: String?,
+    ): Background = copy(collection = collection.copy(url = url, source = sourceId))
+
+    /** The picker's name for a source, or "Custom address" for null — a pasted URL, which is what null means. */
+    private fun sourceLabel(id: String?): Int =
+        when (id) {
+            WallpaperSources.WALLHAVEN_SEARCH.id -> R.string.source_wallhaven_search
+            WallpaperSources.WALLHAVEN_COLLECTION.id -> R.string.source_wallhaven_collection
+            WallpaperSources.OWN_SERVER.id -> R.string.source_own_server
+            WallpaperSources.LIST_FILE.id -> R.string.source_list_file
+            WallpaperSources.MASTODON.id -> R.string.source_mastodon
+            WallpaperSources.NEXTCLOUD.id -> R.string.source_nextcloud
+            else -> R.string.source_custom
+        }
+
+    private fun sourceDetail(id: String?): Int =
+        when (id) {
+            WallpaperSources.WALLHAVEN_SEARCH.id -> R.string.source_wallhaven_search_detail
+            WallpaperSources.WALLHAVEN_COLLECTION.id -> R.string.source_wallhaven_collection_detail
+            WallpaperSources.OWN_SERVER.id -> R.string.source_own_server_detail
+            WallpaperSources.LIST_FILE.id -> R.string.source_list_file_detail
+            WallpaperSources.MASTODON.id -> R.string.source_mastodon_detail
+            WallpaperSources.NEXTCLOUD.id -> R.string.source_nextcloud_detail
+            else -> R.string.source_custom_detail
+        }
+
+    /** What the address dialog explains, tailored to the source that opened it. */
+    private fun sourceAddressHelp(id: String?): Int =
+        when (id) {
+            WallpaperSources.WALLHAVEN_COLLECTION.id -> R.string.source_address_help_wallhaven_collection
+            WallpaperSources.OWN_SERVER.id -> R.string.source_address_help_own_server
+            WallpaperSources.LIST_FILE.id -> R.string.source_address_help_list_file
+            WallpaperSources.MASTODON.id -> R.string.source_address_help_mastodon
+            WallpaperSources.NEXTCLOUD.id -> R.string.source_address_help_nextcloud
+            else -> R.string.background_address_help
+        }
+
     // ---- screens ------------------------------------------------------------------------------
 
     private enum class ScreenId {
@@ -516,6 +608,8 @@ class SettingsActivity : ThemedActivity() {
         THEME,
         THEME_EDITOR,
         BACKGROUND,
+        SOURCE_PICKER,
+        SOURCE_INFO,
         APPEARANCE,
         BACKUP,
         ABOUT,
@@ -895,11 +989,18 @@ class SettingsActivity : ThemedActivity() {
         private fun collectionRows(background: Background) {
             val collection = background.collection
             add(
-                Row(
-                    getString(R.string.background_address),
-                    collection.url.ifEmpty { getString(R.string.background_address_none) },
-                ),
-            ) { askForCollection(collection.url) }
+                Row(getString(R.string.background_source), getString(sourceLabel(collection.source))),
+            ) { push(SourcePickerScreen()) }
+            val source = WallpaperSources.byId(collection.source ?: "")
+            if (source == null || source.input == SourceInput.ADDRESS) {
+                add(
+                    Row(
+                        getString(R.string.background_address_row),
+                        collection.url.ifEmpty { getString(R.string.background_address_none) },
+                    ),
+                ) { askForCollection(collection.url, collection.source, sourceAddressHelp(collection.source)) }
+            }
+            add(Row(getString(R.string.background_about_source))) { push(SourceInfoScreen()) }
             add(Row(getString(R.string.background_interval), getString(intervalLabel(collection.intervalMinutes)))) {
                 choose(R.string.background_interval, INTERVALS.map { getString(it.second) }) { index ->
                     edit { it.copy(collection = it.collection.copy(intervalMinutes = INTERVALS[index].first)) }
@@ -985,34 +1086,80 @@ class SettingsActivity : ThemedActivity() {
             }
         }
 
-        /** The address is checked, and then the host it would download from is named out loud. */
-        private fun askForCollection(current: String) {
-            val input =
-                EditText(this@SettingsActivity).apply {
-                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-                    setHint(R.string.background_address_hint)
-                    setText(current)
-                }
-            prompt(R.string.background_address, getString(R.string.background_address_help), input) {
-                val url = input.text.toString().trim()
-                if (url.isEmpty()) {
-                    edit { it.copy(collection = it.collection.copy(url = "")) }
-                    return@prompt
-                }
-                val problem = UrlRules.problemWith(url)
-                if (problem != null) {
-                    toast(getString(R.string.background_address_invalid, problem))
-                    return@prompt
-                }
-                AlertDialog
-                    .Builder(this@SettingsActivity)
-                    .setTitle(R.string.background_address)
-                    .setMessage(getString(R.string.background_address_host, UrlRules.hostOf(url).orEmpty()))
-                    .setPositiveButton(android.R.string.ok) { _, _ ->
-                        edit { it.copy(collection = it.collection.copy(url = url)) }
-                    }.setNegativeButton(android.R.string.cancel, null)
-                    .show()
+        private fun askForCollection(
+            current: String,
+            sourceId: String? = null,
+            helpRes: Int = R.string.background_address_help,
+            appendSlash: Boolean = false,
+        ) = this@SettingsActivity.askForCollection(current, sourceId, helpRes, appendSlash)
+
+        private fun add(
+            row: Row,
+            tap: () -> Unit = {},
+        ) {
+            rows += row
+            taps += tap
+        }
+
+        private fun edit(transform: (Background) -> Background) {
+            settings.update { it.copy(theme = it.theme.copy(background = transform(it.theme.background))) }
+        }
+    }
+
+    /**
+     * Every source is listed, including the ones with nothing configured yet — hiding an
+     * unconfigured source makes the picker look empty and the feature undiscoverable. The two a
+     * user might reasonably expect and cannot have are named too, with the reason, rather than
+     * left to look like an oversight.
+     */
+    private inner class SourcePickerScreen : Screen(ScreenId.SOURCE_PICKER, R.string.background_source) {
+        private lateinit var adapter: RowAdapter
+        private val rows = mutableListOf<Row>()
+        private val taps = mutableListOf<() -> Unit>()
+
+        override fun createView(): View {
+            adapter = RowAdapter(this@SettingsActivity, colors, emptyList())
+            refresh()
+            return list(adapter, onClick = { position -> taps.getOrNull(position)?.invoke() })
+        }
+
+        override fun refresh() {
+            rows.clear()
+            taps.clear()
+            val collection = settings.settings.theme.background.collection
+            val current = collection.source ?: WallpaperSources.CUSTOM.id
+            for (source in WallpaperSources.all) {
+                add(
+                    Row(
+                        getString(sourceLabel(source.id)),
+                        getString(sourceDetail(source.id)),
+                        checked = current == source.id,
+                        singleChoice = true,
+                    ),
+                ) { choose(source) }
             }
+            add(Row(getString(R.string.source_unavailable_header), isHeader = true))
+            add(
+                Row(getString(R.string.source_unavailable_google_photos), enabled = false),
+            ) { toast(getString(R.string.source_unavailable_google_photos_reason)) }
+            add(
+                Row(getString(R.string.source_unavailable_unsplash), enabled = false),
+            ) { toast(getString(R.string.source_unavailable_unsplash_reason)) }
+            adapter.rows = rows.toList()
+            adapter.notifyDataSetChanged()
+        }
+
+        private fun choose(source: WallpaperSource) {
+            val collection = settings.settings.theme.background.collection
+            if (source.input == SourceInput.NONE) {
+                edit { it.withCollectionUrl(source.fixedUrl.orEmpty(), source.id) }
+                popTo(ScreenId.BACKGROUND)
+                return
+            }
+            // A fresh address source starts blank: the old url belonged to whatever was selected
+            // before, and carrying it over would look configured for a source it was never set on.
+            if (collection.source != source.id) edit { it.withCollectionUrl("", source.id) }
+            popTo(ScreenId.BACKGROUND)
         }
 
         private fun add(
@@ -1025,6 +1172,40 @@ class SettingsActivity : ThemedActivity() {
 
         private fun edit(transform: (Background) -> Background) {
             settings.update { it.copy(theme = it.theme.copy(background = transform(it.theme.background))) }
+        }
+    }
+
+    /**
+     * What the current source is, and — because Wallhaven asserts no licence over what it hosts —
+     * the one sentence that has to be said out loud rather than implied by a licence badge that
+     * would not be true. Nothing here is per-image: that needs a credit record this build does not
+     * keep yet, and is not owed until a source that can name one ships.
+     */
+    private inner class SourceInfoScreen : Screen(ScreenId.SOURCE_INFO, R.string.background_about_source) {
+        override fun createView(): View {
+            val collection = settings.settings.theme.background.collection
+            val sourceId = collection.source
+            val paragraphs = mutableListOf(getString(sourceLabel(sourceId)) + " — " + getString(sourceDetail(sourceId)))
+            if (sourceId == WallpaperSources.WALLHAVEN_SEARCH.id ||
+                sourceId == WallpaperSources.WALLHAVEN_COLLECTION.id
+            ) {
+                paragraphs += getString(R.string.source_wallhaven_licence)
+            }
+            paragraphs += getString(R.string.source_info_privacy)
+            val actions = mutableListOf<Pair<String, () -> Unit>>()
+            if (collection.url.startsWith("https://")) {
+                actions += getString(R.string.source_info_open) to { openUrl(collection.url) }
+            }
+            actions += getString(R.string.source_info_read_more) to { openUrl(SOURCES_DOC_URL) }
+            return page(paragraphs, actions)
+        }
+
+        private fun openUrl(url: String) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            } catch (e: ActivityNotFoundException) {
+                toast(getString(R.string.action_unavailable))
+            }
         }
     }
 
@@ -2033,6 +2214,8 @@ class SettingsActivity : ThemedActivity() {
             )
 
         const val PERCENT = 100
+
+        const val SOURCES_DOC_URL = "https://github.com/subhaneetshrestha/atomic-launcher/blob/main/docs/SOURCES.md"
 
         fun directionLabel(angle: Int): Int =
             DIRECTIONS.minByOrNull { kotlin.math.abs(it.first - angle) }?.second

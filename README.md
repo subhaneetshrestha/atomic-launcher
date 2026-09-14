@@ -81,6 +81,7 @@ Modules: `:app` (Android), `:core:theme` (settings/theme schema, pure Kotlin), `
 - [`docs/decisions/`](docs/decisions/) — architecture decision records.
 - [`docs/verification/`](docs/verification/) — acceptance runs per phase.
 - [`docs/privacy.md`](docs/privacy.md) — what the app reads, what leaves the device, how to check.
+- [`docs/SOURCES.md`](docs/SOURCES.md) — every named wallpaper source: who runs it, what licence its images carry, what atomic sends.
 - [`docs/release/`](docs/release/checklist.md) — cutting a release, and signing the key that does it.
 
 ## Support

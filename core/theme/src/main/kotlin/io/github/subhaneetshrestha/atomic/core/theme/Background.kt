@@ -49,10 +49,17 @@ data class Gradient(
  * Where the images come from and how often they change. [url] is whatever the user pasted — a
  * list, a feed, a JSON document, a single image or a Wallhaven search; what it turns out to be is
  * worked out when it is fetched.
+ *
+ * [source] only ever labels how [url] was produced; it is never a substitute for it. That is what
+ * keeps this compatible in both directions: an older build ignores an unknown [source] and still
+ * has a working [url] to fetch, and a document with no [source] at all — every 1.0 file — reads
+ * exactly as "a pasted address", which is what it always meant. Null rather than empty on purpose:
+ * [ThemeJson] omits a null field entirely, so the four shipped theme files stay byte-identical.
  */
 @Serializable
 data class CollectionConfig(
     val url: String = "",
+    val source: String? = null,
     val intervalMinutes: Int = DEFAULT_INTERVAL_MINUTES,
     /** Fetch only on wi-fi. On by default: nobody expects their home screen to spend mobile data. */
     val unmeteredOnly: Boolean = true,
